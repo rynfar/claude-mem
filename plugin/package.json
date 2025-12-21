@@ -1,8 +1,8 @@
 {
-  "name": "claude-mem-plugin",
-  "version": "7.4.5",
+  "name": "opencode-mem-plugin",
+  "version": "0.1.0",
   "private": true,
-  "description": "Runtime dependencies for claude-mem bundled hooks",
+  "description": "Runtime dependencies for opencode-mem plugin",
   "type": "module",
   "dependencies": {},
   "engines": {

@@ -63,9 +63,11 @@ jobs:
               }
             `;
 
+            // TODO: Update these IDs for the opencode-mem repository
+            // These are placeholder IDs from the original claude-mem repo
             const variables = {
-              repositoryId: 'R_kgDOPng1Jw',
-              categoryId: 'DIC_kwDOPng1J84Cw86z',
+              repositoryId: 'REPLACE_WITH_REPO_ID',
+              categoryId: 'REPLACE_WITH_CATEGORY_ID',
               title: issue.title,
               body: discussionBody
             };

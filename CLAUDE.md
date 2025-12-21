@@ -1,97 +1,70 @@
-/* To @claude: be vigilant about only leaving evergreen context in this file, claude-mem handles working context separately. */
-
-# Claude-Mem: AI Development Instructions
+# OpenCode-Mem: AI Development Instructions
 
 ## What This Project Is
 
-Claude-mem is a Claude Code plugin providing persistent memory across sessions. It captures tool usage, compresses observations using the Claude Agent SDK, and injects relevant context into future sessions.
+OpenCode-mem is a fork of [claude-mem](https://github.com/thedotmack/claude-mem) being converted to work with [OpenCode](https://opencode.ai) instead of Claude Code. It provides persistent memory across sessions by capturing tool usage, compressing observations using the Claude Agent SDK, and injecting relevant context into future sessions.
+
+**Status**: Work in progress. See `CONVERSION_PLAN.md` for migration details.
 
 ## Architecture
 
-**5 Lifecycle Hooks**: SessionStart → UserPromptSubmit → PostToolUse → Summary → SessionEnd
+**OpenCode Plugin** (`src/index.ts`) - Main entry point with lifecycle handlers:
+- `event: session.created/idle/deleted` - Session lifecycle
+- `chat.message` - Context injection on first message  
+- `tool.execute.after` - Observation capture
 
-**Hooks** (`src/hooks/*.ts`) - TypeScript → ESM, built to `plugin/scripts/*-hook.js`
-
-**Worker Service** (`src/services/worker-service.ts`) - Express API on port 37777, Bun-managed, handles AI processing asynchronously
+**Worker Service** (`src/services/worker-service.ts`) - Express API on port 37777, Bun-managed, handles AI processing asynchronously (unchanged from claude-mem)
 
 **Database** (`src/services/sqlite/`) - SQLite3 at `~/.claude-mem/claude-mem.db` with FTS5 full-text search
 
-**Search Skill** (`plugin/skills/mem-search/SKILL.md`) - HTTP API for searching past work, auto-invoked when users ask about history
-
 **Chroma** (`src/services/sync/ChromaSync.ts`) - Vector embeddings for semantic search
 
-**Viewer UI** (`src/ui/viewer/`) - React interface at http://localhost:37777, built to `plugin/ui/viewer.html`
+**Viewer UI** (`src/ui/viewer/`) - React interface at http://localhost:37777
 
-## Privacy Tags
+## Conversion Progress
 
-**Dual-Tag System** for meta-observation control:
-- `<private>content</private>` - User-level privacy control (manual, prevents storage)
-- `<claude-mem-context>content</claude-mem-context>` - System-level tag (auto-injected observations, prevents recursive storage)
-
-**Implementation**: Tag stripping happens at hook layer (edge processing) before data reaches worker/database. See `src/utils/tag-stripping.ts` for shared utilities.
+- [x] Phase 0: Project setup (rename, remove Claude Code hooks)
+- [ ] Phase 1: Core infrastructure (MemClient HTTP client)
+- [ ] Phase 2: Hook conversion (OpenCode handlers)
+- [ ] Phase 3: Tools integration (mem_search, mem_timeline)
+- [ ] Phase 4: Testing and polish
 
 ## Build Commands
 
 ```bash
-npm run build-and-sync        # Build, sync to marketplace, restart worker
+npm run build              # Build the plugin
+npm run worker:start       # Start worker service
+npm run worker:logs        # View worker logs
+npm test                   # Run tests
 ```
-
-**Viewer UI**: http://localhost:37777
 
 ## Configuration
 
-Settings are managed in `~/.claude-mem/settings.json`. The file is auto-created with defaults on first run.
+Settings in `~/.config/opencode/opencode-mem.json` or `~/.opencode-mem/settings.json`:
 
-**Core Settings:**
-- `CLAUDE_MEM_MODEL` - Model for observations/summaries (default: claude-sonnet-4-5)
-- `CLAUDE_MEM_CONTEXT_OBSERVATIONS` - Observations injected at SessionStart
-- `CLAUDE_MEM_WORKER_PORT` - Worker service port (default: 37777)
-- `CLAUDE_MEM_WORKER_HOST` - Worker bind address (default: 127.0.0.1, use 0.0.0.0 for remote access)
-
-**System Configuration:**
-- `CLAUDE_MEM_DATA_DIR` - Data directory location (default: ~/.claude-mem)
-- `CLAUDE_MEM_LOG_LEVEL` - Log verbosity: DEBUG, INFO, WARN, ERROR, SILENT (default: INFO)
+```json
+{
+  "workerUrl": "http://127.0.0.1:37777",
+  "contextMaxObservations": 50,
+  "enabled": true
+}
+```
 
 ## File Locations
 
 - **Source**: `<project-root>/src/`
-- **Built Plugin**: `<project-root>/plugin/`
-- **Installed Plugin**: `~/.claude/plugins/marketplaces/thedotmack/`
+- **Plugin Entry**: `src/index.ts`
+- **Config Schema**: `src/config/schema.ts`
 - **Database**: `~/.claude-mem/claude-mem.db`
 - **Chroma**: `~/.claude-mem/chroma/`
 
 ## Requirements
 
-- **Bun** (all platforms - auto-installed if missing)
-- **uv** (all platforms - auto-installed if missing, provides Python for Chroma)
-- Node.js (build tools only)
+- **Node.js**: 18+
+- **Bun**: Auto-installed if missing
+- **uv**: Auto-installed if missing (for Chroma)
 
-## Documentation
+## Credits
 
-**Public Docs**: https://docs.claude-mem.ai (Mintlify)
-**Source**: `docs/public/` - MDX files, edit `docs.json` for navigation
-**Deploy**: Auto-deploys from GitHub on push to main
-
-## Pro Features Architecture
-
-Claude-mem is designed with a clean separation between open-source core functionality and optional Pro features.
-
-**Open-Source Core** (this repository):
-
-- All worker API endpoints on localhost:37777 remain fully open and accessible
-- Pro features are headless - no proprietary UI elements in this codebase
-- Pro integration points are minimal: settings for license keys, tunnel provisioning logic
-- The architecture ensures Pro features extend rather than replace core functionality
-
-**Pro Features** (coming soon, external):
-
-- Enhanced UI (Memory Stream) connects to the same localhost:37777 endpoints as the open viewer
-- Additional features like advanced filtering, timeline scrubbing, and search tools
-- Access gated by license validation, not by modifying core endpoints
-- Users without Pro licenses continue using the full open-source viewer UI without limitation
-
-This architecture preserves the open-source nature of the project while enabling sustainable development through optional paid features.
-
-# Important
-
-No need to edit the changelog ever, it's generated automatically.
+- Original [claude-mem](https://github.com/thedotmack/claude-mem) by Alex Newman (@thedotmack)
+- OpenCode adaptation by Ryan Far (@rynfar)

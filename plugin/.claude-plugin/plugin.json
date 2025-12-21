@@ -1,17 +1,16 @@
 {
-  "name": "claude-mem",
-  "version": "7.4.5",
-  "description": "Persistent memory system for Claude Code - seamlessly preserve context across sessions",
+  "name": "opencode-mem",
+  "version": "0.1.0",
+  "description": "Persistent memory plugin for OpenCode - preserve context across sessions",
   "author": {
-    "name": "Alex Newman"
+    "name": "Ryan Far (fork of claude-mem by Alex Newman)"
   },
-  "repository": "https://github.com/thedotmack/claude-mem",
+  "repository": "https://github.com/rynfar/opencode-mem",
   "license": "AGPL-3.0",
   "keywords": [
+    "opencode",
     "memory",
     "context",
-    "persistence",
-    "hooks",
-    "mcp"
+    "persistence"
   ]
 }

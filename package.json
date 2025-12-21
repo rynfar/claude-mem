@@ -1,29 +1,27 @@
 {
-  "name": "claude-mem",
-  "version": "7.4.5",
-  "description": "Memory compression system for Claude Code - persist context across sessions",
+  "name": "opencode-mem",
+  "version": "0.1.0",
+  "description": "Persistent memory plugin for OpenCode - preserve context across sessions",
   "keywords": [
-    "claude",
-    "claude-code",
+    "opencode",
+    "opencode-plugin",
     "claude-agent-sdk",
-    "mcp",
-    "plugin",
     "memory",
-    "compression",
+    "context",
+    "persistence",
     "knowledge-graph",
-    "transcript",
     "typescript",
     "nodejs"
   ],
-  "author": "Alex Newman",
+  "author": "Ryan Far (fork of claude-mem by Alex Newman)",
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/thedotmack/claude-mem.git"
+    "url": "https://github.com/rynfar/opencode-mem.git"
   },
-  "homepage": "https://github.com/thedotmack/claude-mem#readme",
+  "homepage": "https://github.com/rynfar/opencode-mem#readme",
   "bugs": {
-    "url": "https://github.com/thedotmack/claude-mem/issues"
+    "url": "https://github.com/rynfar/opencode-mem/issues"
   },
   "type": "module",
   "engines": {
@@ -60,12 +58,14 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.67",
     "@modelcontextprotocol/sdk": "^1.20.1",
+    "@opencode-ai/plugin": "^0.1.0",
     "ansi-to-html": "^0.7.2",
     "express": "^4.18.2",
     "glob": "^11.0.3",
     "handlebars": "^4.7.8",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "zod": "^3.24.0",
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
