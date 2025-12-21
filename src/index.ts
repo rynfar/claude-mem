@@ -6,6 +6,7 @@ import {
   createMemTimelineTool,
   createMemStatusTool,
 } from "./tools/index.js";
+import { ensureWorkerRunning } from "./shared/worker-utils.js";
 
 const OBSERVABLE_TOOLS = new Set([
   "read", "write", "edit", "bash", "glob", "grep",
@@ -34,14 +35,15 @@ const OpenCodeMemPlugin: Plugin = async (ctx) => {
     return {};
   }
 
-  const client = new MemClient(config.workerUrl, config.workerTimeout);
-
-  const healthy = await client.healthCheck();
-  if (healthy) {
-    console.log("[opencode-mem] Connected to worker at", config.workerUrl);
-  } else {
-    console.warn("[opencode-mem] Worker not available at", config.workerUrl);
+  try {
+    await ensureWorkerRunning();
+    console.log("[opencode-mem] Worker running at", config.workerUrl);
+  } catch (err) {
+    // Non-fatal: plugin continues in degraded mode without memory persistence
+    console.error("[opencode-mem] Failed to start worker:", err);
   }
+
+  const client = new MemClient(config.workerUrl, config.workerTimeout);
 
   const injectedSessions = new Set<string>();
   const toolInputCache = new Map<string, Record<string, unknown>>();
