@@ -34,7 +34,7 @@ Use when:
 - Looking at the history of changes to a feature
 - Understanding how a bug was introduced or fixed`,
 
-    args: z.object({
+    args: {
       observationId: z
         .number()
         .optional()
@@ -48,7 +48,7 @@ Use when:
         .optional()
         .default(5)
         .describe("Number of items before/after (default: 5)"),
-    }),
+    },
 
     execute: async ({ observationId, query, window }) => {
       try {

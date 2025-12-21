@@ -46,7 +46,7 @@ Use when:
 - Looking for past decisions or implementations
 - Searching for previous bugfixes or features`,
 
-    args: z.object({
+    args: {
       query: z.string().describe("Natural language search query"),
       limit: z
         .number()
@@ -57,7 +57,7 @@ Use when:
         .enum(["bugfix", "feature", "refactor", "change", "discovery", "decision"])
         .optional()
         .describe("Filter by observation type"),
-    }),
+    },
 
     execute: async ({ query, limit, type }) => {
       try {

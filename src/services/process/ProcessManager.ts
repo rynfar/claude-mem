@@ -2,14 +2,14 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from '
 import { createWriteStream } from 'fs';
 import { join } from 'path';
 import { spawn, spawnSync } from 'child_process';
-import { homedir } from 'os';
-import { DATA_DIR } from '../../shared/paths.js';
-import { getBunPath, isBunAvailable } from '../../utils/bun-path.js';
+import { DATA_DIR, getPackageRoot } from '../../shared/paths.js';
+import { getBunPath } from '../../utils/bun-path.js';
 import { SettingsDefaultsManager } from '../../shared/SettingsDefaultsManager.js';
+import { logger } from '../../utils/logger.js';
 
 const PID_FILE = join(DATA_DIR, 'worker.pid');
 const LOG_DIR = join(DATA_DIR, 'logs');
-const MARKETPLACE_ROOT = join(homedir(), '.claude', 'plugins', 'marketplaces', 'thedotmack');
+const PLUGIN_ROOT = getPackageRoot();
 
 interface PidInfo {
   pid: number;
@@ -40,7 +40,7 @@ export class ProcessManager {
     // On Windows, use the wrapper script to solve zombie port problem
     // On Unix, use the worker directly
     const scriptName = process.platform === 'win32' ? 'worker-wrapper.cjs' : 'worker-service.cjs';
-    const workerScript = join(MARKETPLACE_ROOT, 'plugin', 'scripts', scriptName);
+    const workerScript = join(PLUGIN_ROOT, 'plugin', 'scripts', scriptName);
 
     if (!existsSync(workerScript)) {
       return { success: false, error: `Worker script not found at ${workerScript}` };
@@ -50,10 +50,6 @@ export class ProcessManager {
 
     // Use Bun on all platforms with PowerShell workaround for Windows console popups
     return this.startWithBun(workerScript, logFile, port);
-  }
-
-  private static isBunAvailable(): boolean {
-    return isBunAvailable();
   }
 
   /**
@@ -86,13 +82,13 @@ export class ProcessManager {
         // This solves the zombie port problem: the wrapper has no sockets, so when it kills
         // and respawns the inner worker, the socket is properly released.
         //
-        // Security: All paths (bunPath, script, MARKETPLACE_ROOT) are application-controlled system paths,
+        // Security: All paths (bunPath, script, PLUGIN_ROOT) are application-controlled system paths,
         // not user input. If an attacker could modify these paths, they would already have full filesystem
         // access including direct access to ~/.claude-mem/claude-mem.db. Nevertheless, we properly escape
         // all values for PowerShell to follow security best practices.
         const escapedBunPath = this.escapePowerShellString(bunPath);
         const escapedScript = this.escapePowerShellString(script);
-        const escapedWorkDir = this.escapePowerShellString(MARKETPLACE_ROOT);
+        const escapedWorkDir = this.escapePowerShellString(PLUGIN_ROOT);
         const escapedLogFile = this.escapePowerShellString(logFile);
         const envVars = `$env:CLAUDE_MEM_WORKER_PORT='${port}'`;
         const psCommand = `${envVars}; Start-Process -FilePath '${escapedBunPath}' -ArgumentList '${escapedScript}' -WorkingDirectory '${escapedWorkDir}' -WindowStyle Hidden -RedirectStandardOutput '${escapedLogFile}' -RedirectStandardError '${escapedLogFile}.err' -PassThru | Select-Object -ExpandProperty Id`;
@@ -131,7 +127,7 @@ export class ProcessManager {
           detached: true,
           stdio: ['ignore', 'pipe', 'pipe'],
           env: { ...process.env, CLAUDE_MEM_WORKER_PORT: String(port) },
-          cwd: MARKETPLACE_ROOT
+          cwd: PLUGIN_ROOT
         });
 
         // Write logs

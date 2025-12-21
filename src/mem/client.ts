@@ -36,7 +36,9 @@ export class MemClient {
         signal: AbortSignal.timeout(this.timeout),
       });
       if (!res.ok) return null;
-      return res.json();
+      const text = await res.text();
+      if (!text) return null;
+      return JSON.parse(text);
     } catch {
       return null;
     }
@@ -51,7 +53,9 @@ export class MemClient {
         signal: AbortSignal.timeout(this.timeout),
       });
       if (!res.ok) return null;
-      return res.json();
+      const text = await res.text();
+      if (!text) return null;
+      return JSON.parse(text);
     } catch {
       return null;
     }

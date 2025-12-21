@@ -11,7 +11,7 @@ Use when:
 - Verifying the worker is running
 - Checking if memories are being captured`,
 
-    args: z.object({}),
+    args: {},
 
     execute: async () => {
       try {

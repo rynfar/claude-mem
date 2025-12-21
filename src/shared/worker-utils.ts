@@ -1,5 +1,4 @@
 import path from "path";
-import { homedir } from "os";
 import { spawnSync } from "child_process";
 import { existsSync, writeFileSync, readFileSync, mkdirSync } from "fs";
 import { logger } from "../utils/logger.js";
@@ -7,8 +6,9 @@ import { HOOK_TIMEOUTS, getTimeout } from "./hook-constants.js";
 import { ProcessManager } from "../services/process/ProcessManager.js";
 import { SettingsDefaultsManager } from "./SettingsDefaultsManager.js";
 import { getWorkerRestartInstructions } from "../utils/error-messages.js";
+import { getPackageRoot } from "./paths.js";
 
-const MARKETPLACE_ROOT = path.join(homedir(), '.claude', 'plugins', 'marketplaces', 'thedotmack');
+const PLUGIN_ROOT = getPackageRoot();
 
 // Named constants for health checks
 const HEALTH_CHECK_TIMEOUT_MS = getTimeout(HOOK_TIMEOUTS.HEALTH_CHECK);
@@ -83,7 +83,7 @@ async function isWorkerHealthy(): Promise<boolean> {
  */
 function getPluginVersion(): string | null {
   try {
-    const packageJsonPath = path.join(MARKETPLACE_ROOT, 'package.json');
+    const packageJsonPath = path.join(PLUGIN_ROOT, 'package.json');
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf-8'));
     return packageJson.version;
   } catch (error) {
@@ -185,7 +185,7 @@ async function startWorker(): Promise<boolean> {
       platform: process.platform,
       port,
       error: result.error,
-      marketplaceRoot: MARKETPLACE_ROOT
+      pluginRoot: PLUGIN_ROOT
     });
   }
 
