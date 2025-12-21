@@ -67,4 +67,4 @@ Settings in `~/.config/opencode/opencode-mem.json` or `~/.opencode-mem/settings.
 ## Credits
 
 - Original [claude-mem](https://github.com/thedotmack/claude-mem) by Alex Newman (@thedotmack)
-- OpenCode adaptation by Ryan Far (@rynfar)
+- OpenCode adaptation by Trevor Walker (@rynfar)

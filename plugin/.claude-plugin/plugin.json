@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Persistent memory plugin for OpenCode - preserve context across sessions",
   "author": {
-    "name": "Ryan Far (fork of claude-mem by Alex Newman)"
+    "name": "Trevor Walker (fork of claude-mem by Alex Newman)"
   },
   "repository": "https://github.com/rynfar/opencode-mem",
   "license": "AGPL-3.0",

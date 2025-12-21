@@ -13,7 +13,7 @@
     "typescript",
     "nodejs"
   ],
-  "author": "Ryan Far (fork of claude-mem by Alex Newman)",
+  "author": "Trevor Walker (fork of claude-mem by Alex Newman)",
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",
