@@ -1,6 +1,11 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { MemClient } from "./mem/client.js";
 import { loadConfig } from "./config/schema.js";
+import {
+  createMemSearchTool,
+  createMemTimelineTool,
+  createMemStatusTool,
+} from "./tools/index.js";
 
 const OBSERVABLE_TOOLS = new Set([
   "read", "write", "edit", "bash", "glob", "grep",
@@ -150,6 +155,12 @@ const OpenCodeMemPlugin: Plugin = async (ctx) => {
     },
 
     config: async (cfg) => {},
+
+    tool: {
+      mem_search: createMemSearchTool(client),
+      mem_timeline: createMemTimelineTool(client),
+      mem_status: createMemStatusTool(client),
+    },
   };
 };
 

@@ -55,10 +55,17 @@
     "translate:all": "npm run translate:tier1 && npm run translate:tier2 && npm run translate:tier3 && npm run translate:tier4",
     "bug-report": "npx tsx scripts/bug-report/cli.ts"
   },
+  "peerDependencies": {
+    "@opencode-ai/plugin": "*"
+  },
+  "peerDependenciesMeta": {
+    "@opencode-ai/plugin": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.1.67",
     "@modelcontextprotocol/sdk": "^1.20.1",
-    "@opencode-ai/plugin": "^0.1.0",
     "ansi-to-html": "^0.7.2",
     "express": "^4.18.2",
     "glob": "^11.0.3",
