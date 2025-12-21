@@ -13,8 +13,14 @@ export interface ObservationInput {
 export interface SessionInitInput {
   claudeSessionId: string;
   project: string;
-  userPrompt?: string;
-  promptNumber?: number;
+  prompt: string;
+}
+
+export interface SessionInitResponse {
+  sessionDbId: number;
+  promptNumber: number;
+  skipped: boolean;
+  reason?: string;
 }
 
 export interface SearchOptions {

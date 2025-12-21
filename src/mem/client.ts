@@ -1,6 +1,7 @@
 import type {
   ObservationInput,
   SessionInitInput,
+  SessionInitResponse,
   SearchOptions,
   SearchResult,
   TimelineOptions,
@@ -41,7 +42,7 @@ export class MemClient {
     }
   }
 
-  async createSession(input: SessionInitInput): Promise<boolean> {
+  async initSession(input: SessionInitInput): Promise<SessionInitResponse | null> {
     try {
       const res = await fetch(`${this.baseUrl}/api/sessions/init`, {
         method: "POST",
@@ -49,9 +50,10 @@ export class MemClient {
         body: JSON.stringify(input),
         signal: AbortSignal.timeout(this.timeout),
       });
-      return res.ok;
+      if (!res.ok) return null;
+      return res.json();
     } catch {
-      return false;
+      return null;
     }
   }
 
