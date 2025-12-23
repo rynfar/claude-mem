@@ -241,15 +241,17 @@ export class SessionRoutes extends BaseRouteHandler {
   });
 
   /**
-   * Queue observations by claudeSessionId (post-tool-use-hook uses this)
+   * Queue observations by agentSessionId (post-tool-use-hook uses this)
    * POST /api/sessions/observations
-   * Body: { claudeSessionId, tool_name, tool_input, tool_response, cwd }
+   * Body: { agentSessionId (or claudeSessionId for backward compat), tool_name, tool_input, tool_response, cwd }
    */
   private handleObservationsByClaudeId = this.wrapHandler((req: Request, res: Response): void => {
-    const { claudeSessionId, tool_name, tool_input, tool_response, cwd } = req.body;
+    const { tool_name, tool_input, tool_response, cwd } = req.body;
+    // Accept both agentSessionId (new) and claudeSessionId (legacy) for backward compatibility
+    const agentSessionId = req.body.agentSessionId ?? req.body.claudeSessionId;
 
-    if (!claudeSessionId) {
-      return this.badRequest(res, 'Missing claudeSessionId');
+    if (!agentSessionId) {
+      return this.badRequest(res, 'Missing agentSessionId');
     }
 
     // Load skip tools from settings
@@ -280,13 +282,13 @@ export class SessionRoutes extends BaseRouteHandler {
     const store = this.dbManager.getSessionStore();
 
     // Get or create session
-    const sessionDbId = store.createSDKSession(claudeSessionId, '', '');
+    const sessionDbId = store.createSDKSession(agentSessionId, '', '');
     const promptNumber = store.getPromptCounter(sessionDbId);
 
     // Privacy check: skip if user prompt was entirely private
     const userPrompt = PrivacyCheckValidator.checkUserPromptPrivacy(
       store,
-      claudeSessionId,
+      agentSessionId,
       promptNumber,
       'observation',
       sessionDbId,
@@ -331,29 +333,30 @@ export class SessionRoutes extends BaseRouteHandler {
   });
 
   /**
-   * Queue summarize by claudeSessionId (summary-hook uses this)
+   * Queue summarize by agentSessionId (summary-hook uses this)
    * POST /api/sessions/summarize
-   * Body: { claudeSessionId, last_user_message, last_assistant_message }
+   * Body: { agentSessionId (or claudeSessionId for backward compat), last_user_message, last_assistant_message }
    *
    * Checks privacy, queues summarize request for SDK agent
    */
   private handleSummarizeByClaudeId = this.wrapHandler((req: Request, res: Response): void => {
-    const { claudeSessionId, last_user_message, last_assistant_message } = req.body;
+    const { last_user_message, last_assistant_message } = req.body;
+    const agentSessionId = req.body.agentSessionId ?? req.body.claudeSessionId;
 
-    if (!claudeSessionId) {
-      return this.badRequest(res, 'Missing claudeSessionId');
+    if (!agentSessionId) {
+      return this.badRequest(res, 'Missing agentSessionId');
     }
 
     const store = this.dbManager.getSessionStore();
 
     // Get or create session
-    const sessionDbId = store.createSDKSession(claudeSessionId, '', '');
+    const sessionDbId = store.createSDKSession(agentSessionId, '', '');
     const promptNumber = store.getPromptCounter(sessionDbId);
 
     // Privacy check: skip if user prompt was entirely private
     const userPrompt = PrivacyCheckValidator.checkUserPromptPrivacy(
       store,
-      claudeSessionId,
+      agentSessionId,
       promptNumber,
       'summarize',
       sessionDbId
@@ -386,20 +389,20 @@ export class SessionRoutes extends BaseRouteHandler {
   });
 
   /**
-   * Complete session by claudeSessionId (cleanup-hook uses this)
+   * Complete session by agentSessionId (cleanup-hook uses this)
    * POST /api/sessions/complete
-   * Body: { claudeSessionId }
+   * Body: { agentSessionId (or claudeSessionId for backward compat) }
    *
    * Marks session complete, stops SDK agent, broadcasts status
    */
   private handleSessionCompleteByClaudeId = this.wrapHandler(async (req: Request, res: Response): Promise<void> => {
-    const { claudeSessionId } = req.body;
+    const agentSessionId = req.body.agentSessionId ?? req.body.claudeSessionId;
 
-    if (!claudeSessionId) {
-      return this.badRequest(res, 'Missing claudeSessionId');
+    if (!agentSessionId) {
+      return this.badRequest(res, 'Missing agentSessionId');
     }
 
-    const found = await this.completionHandler.completeByClaudeId(claudeSessionId);
+    const found = await this.completionHandler.completeByClaudeId(agentSessionId);
 
     if (!found) {
       // No active session - nothing to clean up (may have already been completed)
@@ -411,9 +414,9 @@ export class SessionRoutes extends BaseRouteHandler {
   });
 
   /**
-   * Initialize session by claudeSessionId (new-hook uses this)
+   * Initialize session by agentSessionId (new-hook uses this)
    * POST /api/sessions/init
-   * Body: { claudeSessionId, project, prompt }
+   * Body: { agentSessionId (or claudeSessionId for backward compat), project, prompt }
    *
    * Performs all session initialization DB operations:
    * - Creates/gets SDK session (idempotent)
@@ -423,17 +426,18 @@ export class SessionRoutes extends BaseRouteHandler {
    * Returns: { sessionDbId, promptNumber, skipped: boolean, reason?: string }
    */
   private handleSessionInitByClaudeId = this.wrapHandler((req: Request, res: Response): void => {
-    const { claudeSessionId, project, prompt } = req.body;
+    const agentSessionId = req.body.agentSessionId ?? req.body.claudeSessionId;
+    const { project, prompt } = req.body;
 
-    // Validate required parameters
-    if (!this.validateRequired(req, res, ['claudeSessionId', 'project', 'prompt'])) {
-      return;
+    // Validate required parameters - accept either agentSessionId or claudeSessionId
+    if (!agentSessionId || !project || !prompt) {
+      return this.badRequest(res, 'Missing required parameters: agentSessionId (or claudeSessionId), project, prompt');
     }
 
     const store = this.dbManager.getSessionStore();
 
     // Step 1: Create/get SDK session (idempotent INSERT OR IGNORE)
-    const sessionDbId = store.createSDKSession(claudeSessionId, project, prompt);
+    const sessionDbId = store.createSDKSession(agentSessionId, project, prompt);
 
     // Step 2: Increment prompt counter
     const promptNumber = store.incrementPromptCounter(sessionDbId);
@@ -459,7 +463,7 @@ export class SessionRoutes extends BaseRouteHandler {
     }
 
     // Step 5: Save cleaned user prompt
-    store.saveUserPrompt(claudeSessionId, promptNumber, cleanedPrompt);
+    store.saveUserPrompt(agentSessionId, promptNumber, cleanedPrompt);
 
     logger.info('SESSION', 'Session initialized via HTTP', {
       sessionId: sessionDbId,

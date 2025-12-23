@@ -28,6 +28,13 @@ async function summaryHook(rawInput: string): Promise<void> {
   const adapter = getAdapter();
   const summaryData = adapter.parseSummaryInput(rawInput);
 
+  if (!summaryData.sessionId || summaryData.sessionId.trim() === '') {
+    logger.debug('HOOK', 'Missing or empty session_id, skipping summary');
+    const output = adapter.formatHookOutput('agent.stop', { continue: true, suppressOutput: true });
+    console.log(output);
+    return;
+  }
+
   const port = getWorkerPort();
 
   logger.dataIn('HOOK', 'Stop: Requesting summary', {
@@ -41,7 +48,7 @@ async function summaryHook(rawInput: string): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      claudeSessionId: summaryData.sessionId,
+      agentSessionId: summaryData.sessionId,
       last_user_message: summaryData.lastUserMessage,
       last_assistant_message: summaryData.lastAssistantMessage
     }),

@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { DATA_DIR, DB_PATH, ensureDir } from '../../shared/paths.js';
+import { getDataDir, getDbPath, ensureDir } from '../../shared/paths.js';
 import { logger } from '../../utils/logger.js';
 import {
   TableColumnInfo,
@@ -21,8 +21,8 @@ export class SessionStore {
   public db: Database;
 
   constructor() {
-    ensureDir(DATA_DIR);
-    this.db = new Database(DB_PATH);
+    ensureDir(getDataDir());
+    this.db = new Database(getDbPath());
 
     // Ensure optimized settings
     this.db.run('PRAGMA journal_mode = WAL');

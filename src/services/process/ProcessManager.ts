@@ -3,12 +3,13 @@ import { createWriteStream } from 'fs';
 import { join } from 'path';
 import { spawn, spawnSync } from 'child_process';
 import { homedir } from 'os';
-import { DATA_DIR } from '../../shared/paths.js';
+import { getDataDir, getLogsDir, getUserSettingsPath } from '../../shared/paths.js';
 import { getBunPath, isBunAvailable } from '../../utils/bun-path.js';
 import { SettingsDefaultsManager } from '../../shared/SettingsDefaultsManager.js';
+import { logger } from '../../utils/logger.js';
 
-const PID_FILE = join(DATA_DIR, 'worker.pid');
-const LOG_DIR = join(DATA_DIR, 'logs');
+const getPidFilePath = () => join(getDataDir(), 'worker.pid');
+const getLogDir = () => getLogsDir();
 const MARKETPLACE_ROOT = join(homedir(), '.claude', 'plugins', 'marketplaces', 'thedotmack');
 
 interface PidInfo {
@@ -35,7 +36,7 @@ export class ProcessManager {
     }
 
     // Ensure log directory exists
-    mkdirSync(LOG_DIR, { recursive: true });
+    mkdirSync(getLogDir(), { recursive: true });
 
     // On Windows, use the wrapper script to solve zombie port problem
     // On Unix, use the worker directly
@@ -94,8 +95,18 @@ export class ProcessManager {
         const escapedScript = this.escapePowerShellString(script);
         const escapedWorkDir = this.escapePowerShellString(MARKETPLACE_ROOT);
         const escapedLogFile = this.escapePowerShellString(logFile);
-        const envVars = `$env:CLAUDE_MEM_WORKER_PORT='${port}'`;
-        const psCommand = `${envVars}; Start-Process -FilePath '${escapedBunPath}' -ArgumentList '${escapedScript}' -WorkingDirectory '${escapedWorkDir}' -WindowStyle Hidden -RedirectStandardOutput '${escapedLogFile}' -RedirectStandardError '${escapedLogFile}.err' -PassThru | Select-Object -ExpandProperty Id`;
+        
+        // Forward agent-related env vars so worker uses correct paths
+        const agentEnvVars = [
+          `$env:CLAUDE_MEM_WORKER_PORT='${port}'`,
+          process.env.CLAUDE_MEM_AGENT ? `$env:CLAUDE_MEM_AGENT='${this.escapePowerShellString(process.env.CLAUDE_MEM_AGENT)}'` : null,
+          process.env.CLAUDE_MEM_DATA_DIR ? `$env:CLAUDE_MEM_DATA_DIR='${this.escapePowerShellString(process.env.CLAUDE_MEM_DATA_DIR)}'` : null,
+          process.env.OPENCODE_MEM_DATA_DIR ? `$env:OPENCODE_MEM_DATA_DIR='${this.escapePowerShellString(process.env.OPENCODE_MEM_DATA_DIR)}'` : null,
+          process.env.CLAUDE_PLUGIN_ROOT ? `$env:CLAUDE_PLUGIN_ROOT='${this.escapePowerShellString(process.env.CLAUDE_PLUGIN_ROOT)}'` : null,
+          process.env.OPENCODE_PLUGIN_ROOT ? `$env:OPENCODE_PLUGIN_ROOT='${this.escapePowerShellString(process.env.OPENCODE_PLUGIN_ROOT)}'` : null,
+        ].filter(Boolean).join('; ');
+        
+        const psCommand = `${agentEnvVars}; Start-Process -FilePath '${escapedBunPath}' -ArgumentList '${escapedScript}' -WorkingDirectory '${escapedWorkDir}' -WindowStyle Hidden -RedirectStandardOutput '${escapedLogFile}' -RedirectStandardError '${escapedLogFile}.err' -PassThru | Select-Object -ExpandProperty Id`;
 
         const result = spawnSync('powershell', ['-Command', psCommand], {
           stdio: 'pipe',
@@ -260,7 +271,7 @@ export class ProcessManager {
    */
   private static getPortFromSettings(): number {
     try {
-      const settingsPath = join(DATA_DIR, 'settings.json');
+      const settingsPath = getUserSettingsPath();
       const settings = SettingsDefaultsManager.loadFromFile(settingsPath);
       return parseInt(settings.CLAUDE_MEM_WORKER_PORT, 10);
     } catch {
@@ -317,9 +328,10 @@ export class ProcessManager {
 
   // Helper methods
   private static getPidInfo(): PidInfo | null {
+    const pidFile = getPidFilePath();
     try {
-      if (!existsSync(PID_FILE)) return null;
-      const content = readFileSync(PID_FILE, 'utf-8');
+      if (!existsSync(pidFile)) return null;
+      const content = readFileSync(pidFile, 'utf-8');
       const parsed = JSON.parse(content);
       // Validate required fields have correct types
       if (typeof parsed.pid !== 'number' || typeof parsed.port !== 'number') {
@@ -330,21 +342,24 @@ export class ProcessManager {
     } catch (error) {
       logger.warn('PROCESS', 'Failed to read PID file', {}, {
         error: error instanceof Error ? error.message : String(error),
-        path: PID_FILE
+        path: pidFile
       });
       return null;
     }
   }
 
   private static writePidFile(info: PidInfo): void {
-    mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(PID_FILE, JSON.stringify(info, null, 2));
+    const dataDir = getDataDir();
+    const pidFile = getPidFilePath();
+    mkdirSync(dataDir, { recursive: true });
+    writeFileSync(pidFile, JSON.stringify(info, null, 2));
   }
 
   private static removePidFile(): void {
+    const pidFile = getPidFilePath();
     try {
-      if (existsSync(PID_FILE)) {
-        unlinkSync(PID_FILE);
+      if (existsSync(pidFile)) {
+        unlinkSync(pidFile);
       }
     } catch {
       // Ignore errors
@@ -412,7 +427,7 @@ export class ProcessManager {
 
   private static getLogFilePath(): string {
     const date = new Date().toISOString().slice(0, 10);
-    return join(LOG_DIR, `worker-${date}.log`);
+    return join(getLogDir(), `worker-${date}.log`);
   }
 
   private static formatUptime(startedAt: string): string {

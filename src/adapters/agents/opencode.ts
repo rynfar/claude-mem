@@ -47,6 +47,31 @@ interface OpenCodeSessionEndInput {
   reason?: string;
 }
 
+function safeStringify(value: unknown): string {
+  const seen = new WeakSet();
+  return JSON.stringify(value, (_k, v) => {
+    if (typeof v === 'bigint') return v.toString();
+    if (typeof v === 'object' && v !== null) {
+      if (seen.has(v)) return '[Circular]';
+      seen.add(v);
+    }
+    return v;
+  });
+}
+
+function extractWorkingDir(parsed: Record<string, unknown>): string {
+  return (
+    (parsed.directory as string) ||
+    (parsed.worktree as string) ||
+    (parsed.cwd as string) ||
+    ((parsed.input as Record<string, unknown>)?.directory as string) ||
+    ((parsed.input as Record<string, unknown>)?.worktree as string) ||
+    ((parsed.input as Record<string, unknown>)?.cwd as string) ||
+    process.env.OPENCODE_WORKING_DIR ||
+    process.cwd()
+  );
+}
+
 const OPENCODE_CONFIG: AgentConfig = {
   id: 'opencode',
   name: 'OpenCode',
@@ -126,7 +151,7 @@ export class OpenCodeAdapter implements AgentAdapter {
         toolName: input.tool || 'unknown',
         toolInput: output.args,
         toolOutput: output.output || output.metadata,
-        workingDir: process.cwd(),
+        workingDir: extractWorkingDir(parsed),
         callId: input.callID,
         metadata: {
           title: output.title,
@@ -161,16 +186,24 @@ export class OpenCodeAdapter implements AgentAdapter {
       const parsed = JSON.parse(raw);
       const input: OpenCodeChatMessageInput = parsed.input || parsed;
       const output = parsed.output || {};
+      const workingDir = extractWorkingDir(parsed);
 
       const rawPromptContent = output.message?.content;
-      const prompt = typeof rawPromptContent === 'string'
-        ? rawPromptContent
-        : rawPromptContent ? JSON.stringify(rawPromptContent) : '';
+      let prompt = '';
+      if (typeof rawPromptContent === 'string') {
+        prompt = rawPromptContent;
+      } else if (rawPromptContent) {
+        try {
+          prompt = safeStringify(rawPromptContent);
+        } catch {
+          prompt = String(rawPromptContent);
+        }
+      }
 
       return {
         sessionId: input.sessionID || '',
-        projectName: this.getProjectName(process.cwd()),
-        workingDir: process.cwd(),
+        projectName: this.getProjectName(workingDir),
+        workingDir,
         prompt,
         metadata: {
           agent: input.agent,
@@ -190,9 +223,16 @@ export class OpenCodeAdapter implements AgentAdapter {
   parseSessionEndInput(raw: string): GenericSessionEndData {
     try {
       const input: OpenCodeSessionEndInput = JSON.parse(raw);
+      const knownReasons = new Set(['exit', 'clear', 'logout', 'prompt_input_exit', 'other']);
+      const rawReason = input.reason || 'other';
+      const reason = knownReasons.has(rawReason)
+        ? (rawReason as GenericSessionEndData['reason'])
+        : 'other';
+
       return {
         sessionId: input.sessionID || '',
-        reason: input.reason || 'other',
+        reason,
+        rawReason: reason !== rawReason ? rawReason : undefined,
       };
     } catch {
       return {

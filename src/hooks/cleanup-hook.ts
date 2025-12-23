@@ -33,7 +33,7 @@ async function cleanupHook(rawInput: string): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      claudeSessionId: sessionEndData.sessionId,
+      agentSessionId: sessionEndData.sessionId,
       reason: sessionEndData.reason
     }),
     signal: AbortSignal.timeout(HOOK_TIMEOUTS.DEFAULT)

@@ -114,13 +114,25 @@ export interface GenericSummaryData {
 }
 
 /**
+ * Known session end reasons.
+ */
+export type GenericSessionEndReason =
+  | 'exit'
+  | 'clear'
+  | 'logout'
+  | 'prompt_input_exit'
+  | 'other';
+
+/**
  * Generic session end data - for cleanup/session end events.
  */
 export interface GenericSessionEndData {
   /** Session identifier */
   sessionId: string;
-  /** Reason for session end */
-  reason: 'exit' | 'clear' | 'logout' | 'prompt_input_exit' | 'other' | string;
+  /** Reason for session end (normalized to known values) */
+  reason: GenericSessionEndReason;
+  /** Raw reason from agent if not a known value */
+  rawReason?: string;
 }
 
 // ============================================================================

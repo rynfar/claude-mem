@@ -32,6 +32,10 @@ const _dirname = getDirname();
 
 let _resolvedDataDir: string | null = null;
 
+/**
+ * Resolve the data directory using adapter-aware priority chain.
+ * This is the primary function for getting the data directory.
+ */
 function resolveDataDir(): string {
   if (_resolvedDataDir !== null) {
     return _resolvedDataDir;
@@ -64,19 +68,17 @@ function resolveDataDir(): string {
   }
 }
 
-// Base directories - lazy evaluation via getter
-export const DATA_DIR = new Proxy({} as { toString(): string; valueOf(): string }, {
-  get(_target, prop) {
-    const dir = resolveDataDir();
-    if (prop === 'toString' || prop === 'valueOf') return () => dir;
-    if (prop === Symbol.toPrimitive) return () => dir;
-    return (dir as Record<string | symbol, unknown>)[prop];
-  },
-}) as unknown as string;
+/**
+ * Reset the path cache. Call this in tests when changing environment variables.
+ */
+export function resetPathCache(): void {
+  _resolvedDataDir = null;
+  _legacyDataDir = null;
+}
 
 export const CLAUDE_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
 
-// Data subdirectories - computed from DATA_DIR
+// Data subdirectories - computed from resolveDataDir()
 export const getArchivesDir = () => join(resolveDataDir(), 'archives');
 export const getLogsDir = () => join(resolveDataDir(), 'logs');
 export const getTrashDir = () => join(resolveDataDir(), 'trash');
@@ -86,15 +88,27 @@ export const getUserSettingsPath = () => join(resolveDataDir(), 'settings.json')
 export const getDbPath = () => join(resolveDataDir(), 'claude-mem.db');
 export const getVectorDbDir = () => join(resolveDataDir(), 'vector-db');
 
-// Legacy constants for backward compatibility (evaluate lazily on first use)
-export const ARCHIVES_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'archives');
-export const LOGS_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'logs');
-export const TRASH_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'trash');
-export const BACKUPS_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'backups');
-export const MODES_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'modes');
-export const USER_SETTINGS_PATH = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'settings.json');
-export const DB_PATH = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'claude-mem.db');
-export const VECTOR_DB_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'vector-db');
+// Legacy constants - now using adapter-aware resolver for backward compatibility
+// These are computed at first access, not module load time
+let _legacyDataDir: string | null = null;
+function getLegacyDataDir(): string {
+  if (_legacyDataDir === null) {
+    _legacyDataDir = resolveDataDir();
+  }
+  return _legacyDataDir;
+}
+
+export const ARCHIVES_DIR = join(getLegacyDataDir(), 'archives');
+export const LOGS_DIR = join(getLegacyDataDir(), 'logs');
+export const TRASH_DIR = join(getLegacyDataDir(), 'trash');
+export const BACKUPS_DIR = join(getLegacyDataDir(), 'backups');
+export const MODES_DIR = join(getLegacyDataDir(), 'modes');
+export const USER_SETTINGS_PATH = join(getLegacyDataDir(), 'settings.json');
+export const DB_PATH = join(getLegacyDataDir(), 'claude-mem.db');
+export const VECTOR_DB_DIR = join(getLegacyDataDir(), 'vector-db');
+
+// DATA_DIR constant for backward compatibility - real string, not Proxy
+export const DATA_DIR = getLegacyDataDir();
 
 // Claude integration paths
 export const CLAUDE_SETTINGS_PATH = join(CLAUDE_CONFIG_DIR, 'settings.json');

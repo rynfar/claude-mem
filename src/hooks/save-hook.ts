@@ -25,6 +25,13 @@ async function saveHook(rawInput: string): Promise<void> {
   const adapter = getAdapter();
   const observation = adapter.parseObservationInput(rawInput);
 
+  if (!observation.sessionId || observation.sessionId.trim() === '') {
+    logger.debug('HOOK', 'Missing or empty session_id, skipping observation');
+    const output = adapter.formatHookOutput('tool.after', { continue: true, suppressOutput: true });
+    console.log(output);
+    return;
+  }
+
   if (adapter.shouldSkipTool(observation.toolName)) {
     logger.debug('HOOK', 'Skipping tool observation', { toolName: observation.toolName });
     const output = adapter.formatHookOutput('tool.after', { continue: true, suppressOutput: true });
@@ -45,7 +52,7 @@ async function saveHook(rawInput: string): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      claudeSessionId: observation.sessionId,
+      agentSessionId: observation.sessionId,
       tool_name: observation.toolName,
       tool_input: observation.toolInput,
       tool_response: observation.toolOutput,

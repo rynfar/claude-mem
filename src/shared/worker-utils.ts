@@ -7,6 +7,7 @@ import { HOOK_TIMEOUTS, getTimeout } from "./hook-constants.js";
 import { ProcessManager } from "../services/process/ProcessManager.js";
 import { SettingsDefaultsManager } from "./SettingsDefaultsManager.js";
 import { getWorkerRestartInstructions } from "../utils/error-messages.js";
+import { getDataDir, getUserSettingsPath } from "./paths.js";
 
 const MARKETPLACE_ROOT = path.join(homedir(), '.claude', 'plugins', 'marketplaces', 'thedotmack');
 
@@ -27,7 +28,7 @@ export function getWorkerPort(): number {
     return cachedPort;
   }
 
-  const settingsPath = path.join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'settings.json');
+  const settingsPath = getUserSettingsPath();
   const settings = SettingsDefaultsManager.loadFromFile(settingsPath);
   cachedPort = parseInt(settings.CLAUDE_MEM_WORKER_PORT, 10);
   return cachedPort;
@@ -43,7 +44,7 @@ export function getWorkerHost(): string {
     return cachedHost;
   }
 
-  const settingsPath = path.join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'settings.json');
+  const settingsPath = getUserSettingsPath();
   const settings = SettingsDefaultsManager.loadFromFile(settingsPath);
   cachedHost = settings.CLAUDE_MEM_WORKER_HOST;
   return cachedHost;
@@ -130,7 +131,7 @@ async function ensureWorkerVersionMatches(): Promise<void> {
  */
 async function startWorker(): Promise<boolean> {
   // Clean up legacy PM2 (one-time migration)
-  const dataDir = SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR');
+  const dataDir = getDataDir();
   const pm2MigratedMarker = path.join(dataDir, '.pm2-migrated');
 
   // Ensure data directory exists (may not exist on fresh install)

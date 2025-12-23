@@ -23,6 +23,13 @@ async function newHook(rawInput: string): Promise<void> {
 
   const { sessionId: session_id, projectName: project, prompt } = sessionData;
 
+  if (!session_id || session_id.trim() === '') {
+    console.error('[new-hook] Missing or empty session_id, skipping');
+    const output = adapter.formatHookOutput('user.prompt', { continue: true, suppressOutput: true });
+    console.log(output);
+    return;
+  }
+
   if (!prompt) {
     const output = adapter.formatHookOutput('user.prompt', { continue: true, suppressOutput: true });
     console.log(output);
@@ -36,7 +43,7 @@ async function newHook(rawInput: string): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      claudeSessionId: session_id,
+      agentSessionId: session_id,
       project,
       prompt
     }),

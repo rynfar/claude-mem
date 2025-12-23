@@ -1,5 +1,5 @@
 import { Database } from 'bun:sqlite';
-import { DATA_DIR, DB_PATH, ensureDir } from '../../shared/paths.js';
+import { getDataDir, getDbPath, ensureDir } from '../../shared/paths.js';
 
 // SQLite configuration constants
 const SQLITE_MMAP_SIZE_BYTES = 256 * 1024 * 1024; // 256MB
@@ -46,9 +46,9 @@ export class DatabaseManager {
     }
 
     // Ensure the data directory exists
-    ensureDir(DATA_DIR);
+    ensureDir(getDataDir());
 
-    this.db = new Database(DB_PATH, { create: true, readwrite: true });
+    this.db = new Database(getDbPath(), { create: true, readwrite: true });
 
     // Apply optimized SQLite settings
     this.db.run('PRAGMA journal_mode = WAL');
