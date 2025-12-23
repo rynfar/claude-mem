@@ -2,13 +2,13 @@
  * Cleanup Hook - SessionEnd
  *
  * Pure HTTP client - sends data to worker, worker handles all database operations.
- * This allows the hook to run under any runtime (Node.js or Bun) since it has no
- * native module dependencies.
+ * Uses the adapter layer for agent-agnostic handling.
  */
 
 import { stdin } from 'process';
 import { ensureWorkerRunning, getWorkerPort } from '../shared/worker-utils.js';
 import { HOOK_TIMEOUTS } from '../shared/hook-constants.js';
+import { getAdapter } from '../adapters/index.js';
 
 export interface SessionEndInput {
   session_id: string;
@@ -17,16 +17,14 @@ export interface SessionEndInput {
 
 /**
  * Cleanup Hook Main Logic - Fire-and-forget HTTP client
+ *
+ * Uses the adapter layer for agent-agnostic input/output handling.
  */
-async function cleanupHook(input?: SessionEndInput): Promise<void> {
-  // Ensure worker is running before any other logic
+async function cleanupHook(rawInput: string): Promise<void> {
   await ensureWorkerRunning();
 
-  if (!input) {
-    throw new Error('cleanup-hook requires input from Claude Code');
-  }
-
-  const { session_id, reason } = input;
+  const adapter = getAdapter();
+  const sessionEndData = adapter.parseSessionEndInput(rawInput);
 
   const port = getWorkerPort();
 
@@ -35,8 +33,8 @@ async function cleanupHook(input?: SessionEndInput): Promise<void> {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      claudeSessionId: session_id,
-      reason
+      claudeSessionId: sessionEndData.sessionId,
+      reason: sessionEndData.reason
     }),
     signal: AbortSignal.timeout(HOOK_TIMEOUTS.DEFAULT)
   });
@@ -45,24 +43,22 @@ async function cleanupHook(input?: SessionEndInput): Promise<void> {
     throw new Error(`Session cleanup failed: ${response.status}`);
   }
 
-  console.log('{"continue": true, "suppressOutput": true}');
-  process.exit(0);
+  const output = adapter.formatHookOutput('session.end', { continue: true, suppressOutput: true });
+  console.log(output);
+  process.exit(adapter.getExitCode('success'));
 }
 
 // Entry Point
 if (stdin.isTTY) {
-  // Running manually
-  cleanupHook(undefined);
+  // Running manually - provide default input for testing
+  cleanupHook('{"session_id":"manual","reason":"exit"}');
 } else {
-  let input = '';
-  stdin.on('data', (chunk) => input += chunk);
+  let rawInput = '';
+  stdin.on('data', (chunk) => rawInput += chunk);
   stdin.on('end', async () => {
-    let parsed: SessionEndInput | undefined;
-    try {
-      parsed = input ? JSON.parse(input) : undefined;
-    } catch (error) {
-      throw new Error(`Failed to parse hook input: ${error instanceof Error ? error.message : String(error)}`);
+    if (!rawInput.trim()) {
+      throw new Error('cleanup-hook requires input');
     }
-    await cleanupHook(parsed);
+    await cleanupHook(rawInput);
   });
 }

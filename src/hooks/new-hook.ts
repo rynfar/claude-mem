@@ -1,7 +1,6 @@
 import { stdin } from 'process';
-import { STANDARD_HOOK_RESPONSE } from './hook-response.js';
 import { ensureWorkerRunning, getWorkerPort } from '../shared/worker-utils.js';
-import { getProjectName } from '../utils/project-name.js';
+import { getAdapter } from '../adapters/index.js';
 
 export interface UserPromptSubmitInput {
   session_id: string;
@@ -12,17 +11,21 @@ export interface UserPromptSubmitInput {
 
 /**
  * New Hook Main Logic
+ *
+ * Uses the adapter layer for agent-agnostic input/output handling.
  */
-async function newHook(input?: UserPromptSubmitInput): Promise<void> {
+async function newHook(rawInput: string): Promise<void> {
   // Ensure worker is running before any other logic
   await ensureWorkerRunning();
 
-  if (!input) {
-    throw new Error('newHook requires input');
-  }
+  const adapter = getAdapter();
+  const sessionData = adapter.parsePromptInput(rawInput);
 
-  const { session_id, cwd, prompt } = input;
-  const project = getProjectName(cwd);
+  const { sessionId: session_id, projectName: project, prompt } = sessionData;
+
+  if (!prompt) {
+    throw new Error('newHook requires prompt in input');
+  }
 
   const port = getWorkerPort();
 
@@ -49,7 +52,8 @@ async function newHook(input?: UserPromptSubmitInput): Promise<void> {
   // Check if prompt was entirely private (worker performs privacy check)
   if (initResult.skipped && initResult.reason === 'private') {
     console.error(`[new-hook] Session ${sessionDbId}, prompt #${promptNumber} (fully private - skipped)`);
-    console.log(STANDARD_HOOK_RESPONSE);
+    const output = adapter.formatHookOutput('user.prompt', { continue: true, suppressOutput: true });
+    console.log(output);
     return;
   }
 
@@ -71,18 +75,16 @@ async function newHook(input?: UserPromptSubmitInput): Promise<void> {
     throw new Error(`SDK agent start failed: ${response.status}`);
   }
 
-  console.log(STANDARD_HOOK_RESPONSE);
+  const output = adapter.formatHookOutput('user.prompt', { continue: true, suppressOutput: true });
+  console.log(output);
 }
 
 // Entry Point
-let input = '';
-stdin.on('data', (chunk) => input += chunk);
+let rawInput = '';
+stdin.on('data', (chunk) => rawInput += chunk);
 stdin.on('end', async () => {
-  let parsed: UserPromptSubmitInput | undefined;
-  try {
-    parsed = input ? JSON.parse(input) : undefined;
-  } catch (error) {
-    throw new Error(`Failed to parse hook input: ${error instanceof Error ? error.message : String(error)}`);
+  if (!rawInput.trim()) {
+    throw new Error('newHook requires input');
   }
-  await newHook(parsed);
+  await newHook(rawInput);
 });
