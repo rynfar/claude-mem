@@ -43,7 +43,7 @@
   <a href="docs/i18n/README.no.md">🇳🇴 Norsk</a>
 </p>
 
-<h4 align="center">Persistent memory compression system built for <a href="https://claude.com/claude-code" target="_blank">Claude Code</a>.</h4>
+<h4 align="center">Persistent memory compression system for AI coding agents.<br>Supports <a href="https://claude.com/claude-code" target="_blank">Claude Code</a> and <a href="https://opencode.ai" target="_blank">OpenCode</a>.</h4>
 
 <p align="center">
   <a href="LICENSE">
@@ -98,6 +98,8 @@
 
 ## Quick Start
 
+### Claude Code
+
 Start a new Claude Code session in the terminal and enter the following commands:
 
 ```
@@ -108,9 +110,35 @@ Start a new Claude Code session in the terminal and enter the following commands
 
 Restart Claude Code. Context from previous sessions will automatically appear in new sessions.
 
+### OpenCode
+
+Symlink claude-mem to OpenCode's plugin directory:
+
+```bash
+mkdir -p ~/.config/opencode/node_modules
+ln -s ~/.claude/plugins/marketplaces/thedotmack/claude-mem ~/.config/opencode/node_modules/opencode-mem
+```
+
+Configure OpenCode hooks in `~/.config/opencode/config.json`:
+
+```json
+{
+  "hooks": {
+    "session.created": [{ "command": "~/.config/opencode/node_modules/opencode-mem/dist/hooks/new-hook.js" }],
+    "session.deleted": [{ "command": "~/.config/opencode/node_modules/opencode-mem/dist/hooks/cleanup-hook.js" }],
+    "chat.message": [{ "command": "~/.config/opencode/node_modules/opencode-mem/dist/hooks/user-message-hook.js" }],
+    "tool.execute.after": [{ "command": "~/.config/opencode/node_modules/opencode-mem/dist/hooks/save-hook.js" }],
+    "session.idle": [{ "command": "~/.config/opencode/node_modules/opencode-mem/dist/hooks/summary-hook.js" }]
+  }
+}
+```
+
+Restart OpenCode. The adapter auto-detects the environment.
+
 **Key Features:**
 
 - 🧠 **Persistent Memory** - Context survives across sessions
+- 🔌 **Multi-Agent Support** - Works with Claude Code, OpenCode, and extensible to other agents
 - 📊 **Progressive Disclosure** - Layered memory retrieval with token cost visibility
 - 🔍 **Skill-Based Search** - Query your project history with mem-search skill
 - 🖥️ **Web Viewer UI** - Real-time memory stream at http://localhost:37777
@@ -218,7 +246,7 @@ See **[Beta Features Documentation](https://docs.claude-mem.ai/beta-features)** 
 ## System Requirements
 
 - **Node.js**: 18.0.0 or higher
-- **Claude Code**: Latest version with plugin support
+- **AI Coding Agent**: Claude Code (with plugin support) or OpenCode (with hooks support)
 - **Bun**: JavaScript runtime and process manager (auto-installed if missing)
 - **uv**: Python package manager for vector search (auto-installed if missing)
 - **SQLite 3**: For persistent storage (bundled)
@@ -298,4 +326,4 @@ See the [LICENSE](LICENSE) file for full details.
 
 ---
 
-**Built with Claude Agent SDK** | **Powered by Claude Code** | **Made with TypeScript**
+**Built with Claude Agent SDK** | **Supports Claude Code & OpenCode** | **Made with TypeScript**
