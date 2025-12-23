@@ -7,6 +7,7 @@ import type {
   AgentConfig,
   AgentPaths,
   GenericSessionData,
+  GenericSessionEndData,
   GenericObservationData,
   GenericSummaryData,
   GenericMessage,
@@ -39,6 +40,11 @@ interface ClaudeUserPromptInput {
   session_id: string;
   cwd: string;
   prompt: string;
+}
+
+interface ClaudeSessionEndInput {
+  session_id: string;
+  reason: 'exit' | 'clear' | 'logout' | 'prompt_input_exit' | 'other';
 }
 
 const CLAUDE_CONFIG: AgentConfig = {
@@ -144,6 +150,15 @@ export class ClaudeAdapter implements AgentAdapter {
       projectName: this.getProjectName(input.cwd),
       workingDir: input.cwd,
       prompt: input.prompt,
+    };
+  }
+
+  parseSessionEndInput(raw: string): GenericSessionEndData {
+    const input: ClaudeSessionEndInput = JSON.parse(raw);
+
+    return {
+      sessionId: input.session_id,
+      reason: input.reason,
     };
   }
 

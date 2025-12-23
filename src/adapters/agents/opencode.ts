@@ -7,6 +7,7 @@ import type {
   AgentConfig,
   AgentPaths,
   GenericSessionData,
+  GenericSessionEndData,
   GenericObservationData,
   GenericSummaryData,
   GenericMessage,
@@ -39,6 +40,11 @@ interface OpenCodeSessionInput {
   project?: string;
   directory?: string;
   worktree?: string;
+}
+
+interface OpenCodeSessionEndInput {
+  sessionID: string;
+  reason?: string;
 }
 
 const OPENCODE_CONFIG: AgentConfig = {
@@ -142,6 +148,15 @@ export class OpenCodeAdapter implements AgentAdapter {
         model: input.model,
         messageID: input.messageID,
       },
+    };
+  }
+
+  parseSessionEndInput(raw: string): GenericSessionEndData {
+    const input: OpenCodeSessionEndInput = JSON.parse(raw);
+
+    return {
+      sessionId: input.sessionID,
+      reason: input.reason || 'other',
     };
   }
 

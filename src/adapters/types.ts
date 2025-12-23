@@ -113,6 +113,16 @@ export interface GenericSummaryData {
   transcriptPath?: string;
 }
 
+/**
+ * Generic session end data - for cleanup/session end events.
+ */
+export interface GenericSessionEndData {
+  /** Session identifier */
+  sessionId: string;
+  /** Reason for session end */
+  reason: 'exit' | 'clear' | 'logout' | 'prompt_input_exit' | 'other' | string;
+}
+
 // ============================================================================
 // Agent Configuration
 // ============================================================================
@@ -299,6 +309,15 @@ export interface AgentAdapter {
    * @returns Parsed session data with prompt
    */
   parsePromptInput(raw: string): GenericSessionData;
+
+  /**
+   * Parse raw hook input into generic session end data.
+   * Used for session.end events.
+   *
+   * @param raw - Raw stdin content (usually JSON)
+   * @returns Parsed session end data
+   */
+  parseSessionEndInput(raw: string): GenericSessionEndData;
 
   // --------------------------------------------------------------------------
   // Hook Output Formatting
