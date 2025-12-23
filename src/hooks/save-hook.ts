@@ -2,15 +2,14 @@
  * Save Hook - PostToolUse
  *
  * Pure HTTP client - sends data to worker, worker handles all database operations
- * including privacy checks. This allows the hook to run under any runtime
- * (Node.js or Bun) since it has no native module dependencies.
+ * including privacy checks. Uses the adapter layer for agent-agnostic handling.
  */
 
 import { stdin } from 'process';
-import { STANDARD_HOOK_RESPONSE } from './hook-response.js';
 import { logger } from '../utils/logger.js';
 import { ensureWorkerRunning, getWorkerPort } from '../shared/worker-utils.js';
 import { HOOK_TIMEOUTS } from '../shared/hook-constants.js';
+import { getAdapter } from '../adapters/index.js';
 
 export interface PostToolUseInput {
   session_id: string;
@@ -20,42 +19,37 @@ export interface PostToolUseInput {
   tool_response: any;
 }
 
-/**
- * Save Hook Main Logic - Fire-and-forget HTTP client
- */
-async function saveHook(input?: PostToolUseInput): Promise<void> {
-  // Ensure worker is running before any other logic
+async function saveHook(rawInput: string): Promise<void> {
   await ensureWorkerRunning();
 
-  if (!input) {
-    throw new Error('saveHook requires input');
-  }
+  const adapter = getAdapter();
+  const observation = adapter.parseObservationInput(rawInput);
 
-  const { session_id, cwd, tool_name, tool_input, tool_response } = input;
+  if (adapter.shouldSkipTool(observation.toolName)) {
+    logger.debug('HOOK', 'Skipping tool observation', { toolName: observation.toolName });
+    const output = adapter.formatHookOutput('tool.after', { continue: true, suppressOutput: true });
+    console.log(output);
+    return;
+  }
 
   const port = getWorkerPort();
+  const toolStr = logger.formatTool(observation.toolName, observation.toolInput);
 
-  const toolStr = logger.formatTool(tool_name, tool_input);
+  logger.dataIn('HOOK', `PostToolUse: ${toolStr}`, { workerPort: port });
 
-  logger.dataIn('HOOK', `PostToolUse: ${toolStr}`, {
-    workerPort: port
-  });
-
-  // Validate required fields before sending to worker
-  if (!cwd) {
-    throw new Error(`Missing cwd in PostToolUse hook input for session ${session_id}, tool ${tool_name}`);
+  if (!observation.workingDir) {
+    throw new Error(`Missing workingDir in PostToolUse hook input for session ${observation.sessionId}`);
   }
 
-  // Send to worker - worker handles privacy check and database operations
   const response = await fetch(`http://127.0.0.1:${port}/api/sessions/observations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      claudeSessionId: session_id,
-      tool_name,
-      tool_input,
-      tool_response,
-      cwd
+      claudeSessionId: observation.sessionId,
+      tool_name: observation.toolName,
+      tool_input: observation.toolInput,
+      tool_response: observation.toolOutput,
+      cwd: observation.workingDir
     }),
     signal: AbortSignal.timeout(HOOK_TIMEOUTS.DEFAULT)
   });
@@ -64,20 +58,17 @@ async function saveHook(input?: PostToolUseInput): Promise<void> {
     throw new Error(`Observation storage failed: ${response.status}`);
   }
 
-  logger.debug('HOOK', 'Observation sent successfully', { toolName: tool_name });
+  logger.debug('HOOK', 'Observation sent successfully', { toolName: observation.toolName });
 
-  console.log(STANDARD_HOOK_RESPONSE);
+  const output = adapter.formatHookOutput('tool.after', { continue: true, suppressOutput: true });
+  console.log(output);
 }
 
-// Entry Point
-let input = '';
-stdin.on('data', (chunk) => input += chunk);
+let rawInput = '';
+stdin.on('data', (chunk) => rawInput += chunk);
 stdin.on('end', async () => {
-  let parsed: PostToolUseInput | undefined;
-  try {
-    parsed = input ? JSON.parse(input) : undefined;
-  } catch (error) {
-    throw new Error(`Failed to parse hook input: ${error instanceof Error ? error.message : String(error)}`);
+  if (!rawInput.trim()) {
+    throw new Error('saveHook requires input');
   }
-  await saveHook(parsed);
+  await saveHook(rawInput);
 });

@@ -1,5 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { logger } from '../utils/logger.js';
+import { getAdapter } from '../adapters/index.js';
+import type { GenericMessage } from '../adapters/types.js';
 
 /**
  * Extract last message of specified role from transcript JSONL file
@@ -62,4 +64,24 @@ export function extractLastMessage(
   }
 
   return '';
+}
+
+export function getLastMessageFromAdapter(
+  transcriptPath: string,
+  role: 'user' | 'assistant',
+  stripSystemTags: boolean = false
+): GenericMessage | null {
+  const adapter = getAdapter();
+  if (!adapter.supportsTranscriptParsing()) {
+    return null;
+  }
+  return adapter.getLastMessage(transcriptPath, role, stripSystemTags);
+}
+
+export function parseTranscriptWithAdapter(transcriptPath: string): GenericMessage[] {
+  const adapter = getAdapter();
+  if (!adapter.supportsTranscriptParsing()) {
+    return [];
+  }
+  return adapter.parseTranscript(transcriptPath);
 }

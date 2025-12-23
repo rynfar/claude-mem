@@ -2,14 +2,14 @@
  * Context Hook - SessionStart
  *
  * Pure HTTP client - calls worker to generate context.
- * This allows the hook to run under any runtime (Node.js or Bun) since it has no
- * native module dependencies.
+ * Uses the adapter layer for agent-agnostic input/output handling.
  */
 
 import { stdin } from "process";
 import { ensureWorkerRunning, getWorkerPort } from "../shared/worker-utils.js";
 import { HOOK_TIMEOUTS } from "../shared/hook-constants.js";
-import { getProjectName } from "../utils/project-name.js";
+import { getAdapter } from "../adapters/index.js";
+import type { GenericSessionData } from "../adapters/types.js";
 
 export interface SessionStartInput {
   session_id: string;
@@ -18,15 +18,18 @@ export interface SessionStartInput {
   hook_event_name?: string;
 }
 
-async function contextHook(input?: SessionStartInput): Promise<string> {
-  // Ensure worker is running before any other logic
+async function contextHook(rawInput?: string): Promise<string> {
   await ensureWorkerRunning();
 
-  const cwd = input?.cwd ?? process.cwd();
-  const project = getProjectName(cwd);
-  const port = getWorkerPort();
+  const adapter = getAdapter();
+  const sessionData = rawInput ? adapter.parseSessionInput(rawInput) : {
+    sessionId: '',
+    projectName: adapter.getProjectName(process.cwd()),
+    workingDir: process.cwd(),
+  };
 
-  const url = `http://127.0.0.1:${port}/api/context/inject?project=${encodeURIComponent(project)}`;
+  const port = getWorkerPort();
+  const url = `http://127.0.0.1:${port}/api/context/inject?project=${encodeURIComponent(sessionData.projectName)}`;
 
   const response = await fetch(url, { signal: AbortSignal.timeout(HOOK_TIMEOUTS.DEFAULT) });
 
@@ -38,7 +41,6 @@ async function contextHook(input?: SessionStartInput): Promise<string> {
   return result.trim();
 }
 
-// Entry Point - handle stdin/stdout
 const forceColors = process.argv.includes("--colors");
 
 if (stdin.isTTY || forceColors) {
@@ -47,25 +49,13 @@ if (stdin.isTTY || forceColors) {
     process.exit(0);
   });
 } else {
-  let input = "";
-  stdin.on("data", (chunk) => (input += chunk));
+  let rawInput = "";
+  stdin.on("data", (chunk) => (rawInput += chunk));
   stdin.on("end", async () => {
-    let parsed: SessionStartInput | undefined;
-    try {
-      parsed = input.trim() ? JSON.parse(input) : undefined;
-    } catch (error) {
-      throw new Error(`Failed to parse hook input: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    const text = await contextHook(parsed);
-
-    console.log(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "SessionStart",
-          additionalContext: text,
-        },
-      })
-    );
+    const text = await contextHook(rawInput.trim() || undefined);
+    const adapter = getAdapter();
+    const output = adapter.formatHookOutput('context.inject', { context: text });
+    console.log(output);
     process.exit(0);
   });
 }

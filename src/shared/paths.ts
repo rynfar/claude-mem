@@ -4,6 +4,8 @@ import { existsSync, mkdirSync } from 'fs';
 import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { SettingsDefaultsManager } from './SettingsDefaultsManager.js';
+import { getAdapter } from '../adapters/index.js';
+import type { AgentPaths } from '../adapters/types.js';
 
 // Get __dirname that works in both ESM (hooks) and CJS (worker) contexts
 function getDirname(): string {
@@ -136,4 +138,33 @@ export function createBackupFilename(originalPath: string): string {
     .slice(0, 19);
 
   return `${originalPath}.backup.${timestamp}`;
+}
+
+/**
+ * Get paths from the current agent adapter.
+ * This is the adapter-aware way to get paths that works with any agent.
+ */
+export function getAgentPaths(): AgentPaths {
+  return getAdapter().getPaths();
+}
+
+/**
+ * Get the data directory from the current agent adapter.
+ */
+export function getDataDir(): string {
+  return getAgentPaths().dataDir;
+}
+
+/**
+ * Get the config directory from the current agent adapter.
+ */
+export function getConfigDir(): string {
+  return getAgentPaths().configDir;
+}
+
+/**
+ * Get project name using the current agent adapter.
+ */
+export function getProjectName(workingDir?: string): string {
+  return getAdapter().getProjectName(workingDir || process.cwd());
 }
