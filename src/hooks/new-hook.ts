@@ -24,7 +24,9 @@ async function newHook(rawInput: string): Promise<void> {
   const { sessionId: session_id, projectName: project, prompt } = sessionData;
 
   if (!prompt) {
-    throw new Error('newHook requires prompt in input');
+    const output = adapter.formatHookOutput('user.prompt', { continue: true, suppressOutput: true });
+    console.log(output);
+    return;
   }
 
   const port = getWorkerPort();

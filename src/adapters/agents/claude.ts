@@ -98,68 +98,107 @@ export class ClaudeAdapter implements AgentAdapter {
   }
 
   parseSessionInput(raw: string): GenericSessionData {
-    const input: ClaudeSessionStartInput = raw.trim() ? JSON.parse(raw) : {};
+    try {
+      const input: ClaudeSessionStartInput = raw.trim() ? JSON.parse(raw) : {};
 
-    return {
-      sessionId: input.session_id || '',
-      projectName: this.getProjectName(input.cwd || process.cwd()),
-      workingDir: input.cwd || process.cwd(),
-      transcriptPath: input.transcript_path,
-      metadata: {
-        hookEventName: input.hook_event_name,
-      },
-    };
+      return {
+        sessionId: input.session_id || '',
+        projectName: this.getProjectName(input.cwd || process.cwd()),
+        workingDir: input.cwd || process.cwd(),
+        transcriptPath: input.transcript_path,
+        metadata: {
+          hookEventName: input.hook_event_name,
+        },
+      };
+    } catch {
+      return {
+        sessionId: '',
+        projectName: this.getProjectName(process.cwd()),
+        workingDir: process.cwd(),
+      };
+    }
   }
 
   parseObservationInput(raw: string): GenericObservationData {
-    const input: ClaudePostToolUseInput = JSON.parse(raw);
+    try {
+      const input: ClaudePostToolUseInput = JSON.parse(raw);
 
-    return {
-      sessionId: input.session_id,
-      toolName: input.tool_name,
-      toolInput: input.tool_input,
-      toolOutput: input.tool_response,
-      workingDir: input.cwd,
-    };
+      return {
+        sessionId: input.session_id || '',
+        toolName: input.tool_name || 'unknown',
+        toolInput: input.tool_input,
+        toolOutput: input.tool_response,
+        workingDir: input.cwd || process.cwd(),
+      };
+    } catch {
+      return {
+        sessionId: '',
+        toolName: 'unknown',
+        toolInput: {},
+        toolOutput: {},
+        workingDir: process.cwd(),
+      };
+    }
   }
 
   parseSummaryInput(raw: string): GenericSummaryData {
-    const input: ClaudeStopInput = JSON.parse(raw);
+    try {
+      const input: ClaudeStopInput = JSON.parse(raw);
 
-    const result: GenericSummaryData = {
-      sessionId: input.session_id,
-      transcriptPath: input.transcript_path,
-    };
+      const result: GenericSummaryData = {
+        sessionId: input.session_id || '',
+        transcriptPath: input.transcript_path,
+      };
 
-    if (input.transcript_path) {
-      const lastUser = this.getLastMessage(input.transcript_path, 'user');
-      const lastAssistant = this.getLastMessage(input.transcript_path, 'assistant', true);
+      if (input.transcript_path) {
+        const lastUser = this.getLastMessage(input.transcript_path, 'user');
+        const lastAssistant = this.getLastMessage(input.transcript_path, 'assistant', true);
 
-      if (lastUser) result.lastUserMessage = lastUser.content;
-      if (lastAssistant) result.lastAssistantMessage = lastAssistant.content;
+        if (lastUser) result.lastUserMessage = lastUser.content;
+        if (lastAssistant) result.lastAssistantMessage = lastAssistant.content;
+      }
+
+      return result;
+    } catch {
+      return {
+        sessionId: '',
+      };
     }
-
-    return result;
   }
 
   parsePromptInput(raw: string): GenericSessionData {
-    const input: ClaudeUserPromptInput = JSON.parse(raw);
+    try {
+      const input: ClaudeUserPromptInput = JSON.parse(raw);
 
-    return {
-      sessionId: input.session_id,
-      projectName: this.getProjectName(input.cwd),
-      workingDir: input.cwd,
-      prompt: input.prompt,
-    };
+      return {
+        sessionId: input.session_id || '',
+        projectName: this.getProjectName(input.cwd || process.cwd()),
+        workingDir: input.cwd || process.cwd(),
+        prompt: input.prompt,
+      };
+    } catch {
+      return {
+        sessionId: '',
+        projectName: this.getProjectName(process.cwd()),
+        workingDir: process.cwd(),
+      };
+    }
   }
 
   parseSessionEndInput(raw: string): GenericSessionEndData {
-    const input: ClaudeSessionEndInput = JSON.parse(raw);
+    try {
+      const input: ClaudeSessionEndInput = JSON.parse(raw);
 
-    return {
-      sessionId: input.session_id,
-      reason: input.reason,
-    };
+      return {
+        sessionId: input.session_id || '',
+        reason: input.reason || 'other',
+      };
+    } catch {
+      return {
+        sessionId: '',
+        reason: 'other',
+      };
+    }
   }
 
   formatHookOutput(eventType: GenericHookEvent, response: GenericHookResponse): string {
@@ -325,12 +364,15 @@ export class ClaudeAdapter implements AgentAdapter {
   }
 }
 
+/**
+ * Detect if running under Claude Code.
+ *
+ * Uses ONLY runtime environment signals - no filesystem checks.
+ * Directory existence indicates "installed", not "currently running".
+ * Claude Code sets CLAUDE_PLUGIN_ROOT when executing hooks.
+ */
 export function detectClaude(): boolean {
-  return (
-    !!process.env.CLAUDE_PLUGIN_ROOT ||
-    !!process.env.CLAUDE_CONFIG_DIR ||
-    existsSync(join(homedir(), '.claude'))
-  );
+  return !!process.env.CLAUDE_PLUGIN_ROOT;
 }
 
 export function createClaudeAdapter(): AgentAdapter {

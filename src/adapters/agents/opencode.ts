@@ -94,70 +94,112 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 
   parseSessionInput(raw: string): GenericSessionData {
-    const input: OpenCodeSessionInput = raw.trim() ? JSON.parse(raw) : {};
-    const workingDir = input.directory || input.worktree || process.cwd();
+    try {
+      const input: OpenCodeSessionInput = raw.trim() ? JSON.parse(raw) : {};
+      const workingDir = input.directory || input.worktree || process.cwd();
 
-    return {
-      sessionId: input.sessionID || '',
-      projectName: input.project || this.getProjectName(workingDir),
-      workingDir,
-      metadata: {
-        worktree: input.worktree,
-      },
-    };
+      return {
+        sessionId: input.sessionID || '',
+        projectName: input.project || this.getProjectName(workingDir),
+        workingDir,
+        metadata: {
+          worktree: input.worktree,
+        },
+      };
+    } catch {
+      return {
+        sessionId: '',
+        projectName: this.getProjectName(process.cwd()),
+        workingDir: process.cwd(),
+      };
+    }
   }
 
   parseObservationInput(raw: string): GenericObservationData {
-    const parsed = JSON.parse(raw);
-    const input: OpenCodeToolExecuteInput = parsed.input || parsed;
-    const output: OpenCodeToolExecuteOutput = parsed.output || {};
+    try {
+      const parsed = JSON.parse(raw);
+      const input: OpenCodeToolExecuteInput = parsed.input || parsed;
+      const output: OpenCodeToolExecuteOutput = parsed.output || {};
 
-    return {
-      sessionId: input.sessionID,
-      toolName: input.tool,
-      toolInput: output.args,
-      toolOutput: output.output || output.metadata,
-      workingDir: process.cwd(),
-      callId: input.callID,
-      metadata: {
-        title: output.title,
-      },
-    };
+      return {
+        sessionId: input.sessionID || '',
+        toolName: input.tool || 'unknown',
+        toolInput: output.args,
+        toolOutput: output.output || output.metadata,
+        workingDir: process.cwd(),
+        callId: input.callID,
+        metadata: {
+          title: output.title,
+        },
+      };
+    } catch {
+      return {
+        sessionId: '',
+        toolName: 'unknown',
+        toolInput: {},
+        toolOutput: {},
+        workingDir: process.cwd(),
+      };
+    }
   }
 
   parseSummaryInput(raw: string): GenericSummaryData {
-    const input: OpenCodeSessionInput = JSON.parse(raw);
-
-    return {
-      sessionId: input.sessionID,
-    };
+    try {
+      const input: OpenCodeSessionInput = JSON.parse(raw);
+      return {
+        sessionId: input.sessionID || '',
+      };
+    } catch {
+      return {
+        sessionId: '',
+      };
+    }
   }
 
   parsePromptInput(raw: string): GenericSessionData {
-    const parsed = JSON.parse(raw);
-    const input: OpenCodeChatMessageInput = parsed.input || parsed;
-    const output = parsed.output || {};
+    try {
+      const parsed = JSON.parse(raw);
+      const input: OpenCodeChatMessageInput = parsed.input || parsed;
+      const output = parsed.output || {};
 
-    return {
-      sessionId: input.sessionID,
-      projectName: this.getProjectName(process.cwd()),
-      workingDir: process.cwd(),
-      prompt: output.message?.content || '',
-      metadata: {
-        agent: input.agent,
-        model: input.model,
-        messageID: input.messageID,
-      },
-    };
+      const rawPromptContent = output.message?.content;
+      const prompt = typeof rawPromptContent === 'string'
+        ? rawPromptContent
+        : rawPromptContent ? JSON.stringify(rawPromptContent) : '';
+
+      return {
+        sessionId: input.sessionID || '',
+        projectName: this.getProjectName(process.cwd()),
+        workingDir: process.cwd(),
+        prompt,
+        metadata: {
+          agent: input.agent,
+          model: input.model,
+          messageID: input.messageID,
+        },
+      };
+    } catch {
+      return {
+        sessionId: '',
+        projectName: this.getProjectName(process.cwd()),
+        workingDir: process.cwd(),
+      };
+    }
   }
 
   parseSessionEndInput(raw: string): GenericSessionEndData {
-    const input: OpenCodeSessionEndInput = JSON.parse(raw);
-
-    return {
-      sessionId: input.sessionID,
-      reason: input.reason || 'other',
-    };
+    try {
+      const input: OpenCodeSessionEndInput = JSON.parse(raw);
+      return {
+        sessionId: input.sessionID || '',
+        reason: input.reason || 'other',
+      };
+    } catch {
+      return {
+        sessionId: '',
+        reason: 'other',
+      };
+    }
   }
 
   formatHookOutput(_eventType: GenericHookEvent, response: GenericHookResponse): string {
@@ -192,18 +234,26 @@ export class OpenCodeAdapter implements AgentAdapter {
       throw new Error(`Transcript file not found: ${transcriptPath}`);
     }
 
-    const content = readFileSync(transcriptPath, 'utf-8');
-    const data = JSON.parse(content);
+    try {
+      const content = readFileSync(transcriptPath, 'utf-8');
+      const data = JSON.parse(content);
 
-    if (!data.messages || !Array.isArray(data.messages)) {
+      if (!data.messages || !Array.isArray(data.messages)) {
+        return [];
+      }
+
+      const validRoles = new Set(['user', 'assistant', 'system']);
+
+      return data.messages
+        .filter((msg: { role?: string }) => msg.role && validRoles.has(msg.role))
+        .map((msg: { role: string; content?: string; parts?: Array<{ text?: string }>; time?: { created?: number } }) => ({
+          role: msg.role as 'user' | 'assistant' | 'system',
+          content: msg.content || this.extractPartsContent(msg.parts),
+          timestamp: msg.time?.created,
+        }));
+    } catch {
       return [];
     }
-
-    return data.messages.map((msg: { role: string; content?: string; parts?: Array<{ text?: string }>; time?: { created?: number } }) => ({
-      role: msg.role as 'user' | 'assistant',
-      content: msg.content || this.extractPartsContent(msg.parts),
-      timestamp: msg.time?.created,
-    }));
   }
 
   private extractPartsContent(parts?: Array<{ text?: string }>): string {
@@ -266,13 +316,15 @@ export class OpenCodeAdapter implements AgentAdapter {
   }
 }
 
+/**
+ * Detect if running under OpenCode.
+ *
+ * Uses ONLY runtime environment signals - no filesystem checks.
+ * Directory existence indicates "installed", not "currently running".
+ * OpenCode sets OPENCODE_PLUGIN_ROOT when executing hooks.
+ */
 export function detectOpenCode(): boolean {
-  return (
-    !!process.env.OPENCODE_PLUGIN_ROOT ||
-    !!process.env.OPENCODE_CONFIG ||
-    existsSync(join(homedir(), '.opencode.json')) ||
-    existsSync(join(homedir(), '.config', 'opencode'))
-  );
+  return !!process.env.OPENCODE_PLUGIN_ROOT;
 }
 
 export function createOpenCodeAdapter(): AgentAdapter {

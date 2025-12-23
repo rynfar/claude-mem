@@ -8,33 +8,52 @@ import {
   clearCache,
   forceAdapter,
 } from '../registry.js';
-import { ClaudeAdapter, createClaudeAdapter } from '../agents/claude.js';
-import { OpenCodeAdapter, createOpenCodeAdapter } from '../agents/opencode.js';
+import { ClaudeAdapter, createClaudeAdapter, detectClaude } from '../agents/claude.js';
+import { OpenCodeAdapter, createOpenCodeAdapter, detectOpenCode } from '../agents/opencode.js';
 import type { AgentAdapter, AgentConfig } from '../types.js';
 
-// Save original env
-const originalEnv = { ...process.env };
+const ENV_KEYS_TO_MANAGE = [
+  'CLAUDE_PLUGIN_ROOT',
+  'OPENCODE_PLUGIN_ROOT',
+  'CLAUDE_MEM_AGENT',
+] as const;
 
-// Pure env-var-only detectors for isolated testing
-const envOnlyClaudeDetector = () =>
-  !!process.env.CLAUDE_PLUGIN_ROOT || !!process.env.CLAUDE_CONFIG_DIR;
-const envOnlyOpenCodeDetector = () =>
-  !!process.env.OPENCODE_PLUGIN_ROOT || !!process.env.OPENCODE_CONFIG;
+function saveEnvKeys(): Record<string, string | undefined> {
+  const saved: Record<string, string | undefined> = {};
+  for (const key of ENV_KEYS_TO_MANAGE) {
+    saved[key] = process.env[key];
+  }
+  return saved;
+}
+
+function restoreEnvKeys(saved: Record<string, string | undefined>): void {
+  for (const key of ENV_KEYS_TO_MANAGE) {
+    if (saved[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = saved[key];
+    }
+  }
+}
+
+function clearDetectionEnvVars(): void {
+  for (const key of ENV_KEYS_TO_MANAGE) {
+    delete process.env[key];
+  }
+}
 
 describe('Adapter Registry', () => {
+  let savedEnv: Record<string, string | undefined>;
+
   beforeEach(() => {
+    savedEnv = saveEnvKeys();
+    clearDetectionEnvVars();
     clearCache();
-    // Clean environment - remove all detection env vars
-    delete process.env.CLAUDE_PLUGIN_ROOT;
-    delete process.env.CLAUDE_CONFIG_DIR;
-    delete process.env.OPENCODE_PLUGIN_ROOT;
-    delete process.env.OPENCODE_CONFIG;
   });
 
   afterEach(() => {
     clearCache();
-    // Restore env
-    process.env = { ...originalEnv };
+    restoreEnvKeys(savedEnv);
   });
 
   describe('getRegisteredAdapters', () => {
@@ -55,12 +74,6 @@ describe('Adapter Registry', () => {
   });
 
   describe('detectAgent', () => {
-    beforeEach(() => {
-      // Re-register with env-only detectors to isolate from filesystem
-      registerAdapter('claude-code', 100, envOnlyClaudeDetector, createClaudeAdapter);
-      registerAdapter('opencode', 90, envOnlyOpenCodeDetector, createOpenCodeAdapter);
-    });
-
     it('should detect Claude Code when CLAUDE_PLUGIN_ROOT is set', () => {
       process.env.CLAUDE_PLUGIN_ROOT = '/some/path';
       clearCache();
@@ -91,6 +104,40 @@ describe('Adapter Registry', () => {
       clearCache();
       expect(detectAgent()).toBe('claude-code');
     });
+
+    it('should respect explicit CLAUDE_MEM_AGENT override', () => {
+      process.env.CLAUDE_MEM_AGENT = 'opencode';
+      clearCache();
+      expect(detectAgent()).toBe('opencode');
+    });
+
+    it('should ignore invalid CLAUDE_MEM_AGENT values', () => {
+      process.env.CLAUDE_MEM_AGENT = 'nonexistent-agent';
+      clearCache();
+      expect(detectAgent()).toBe('claude-code');
+    });
+  });
+
+  describe('detectClaude', () => {
+    it('should return true when CLAUDE_PLUGIN_ROOT is set', () => {
+      process.env.CLAUDE_PLUGIN_ROOT = '/some/path';
+      expect(detectClaude()).toBe(true);
+    });
+
+    it('should return false when no env vars are set', () => {
+      expect(detectClaude()).toBe(false);
+    });
+  });
+
+  describe('detectOpenCode', () => {
+    it('should return true when OPENCODE_PLUGIN_ROOT is set', () => {
+      process.env.OPENCODE_PLUGIN_ROOT = '/some/path';
+      expect(detectOpenCode()).toBe(true);
+    });
+
+    it('should return false when no env vars are set', () => {
+      expect(detectOpenCode()).toBe(false);
+    });
   });
 
   describe('getAdapter', () => {
@@ -107,10 +154,6 @@ describe('Adapter Registry', () => {
     });
 
     it('should auto-detect adapter when no id provided', () => {
-      // Re-register with env-only detectors
-      registerAdapter('claude-code', 100, envOnlyClaudeDetector, createClaudeAdapter);
-      registerAdapter('opencode', 90, envOnlyOpenCodeDetector, createOpenCodeAdapter);
-
       process.env.OPENCODE_PLUGIN_ROOT = '/some/path';
       clearCache();
       const adapter = getAdapter();
@@ -176,7 +219,6 @@ describe('Adapter Registry', () => {
       const adapter = getAdapter('test-agent');
       expect(adapter.config.id).toBe('test-agent');
 
-      // Cleanup
       unregisterAdapter('test-agent');
     });
 
@@ -191,13 +233,7 @@ describe('Adapter Registry', () => {
 
       expect(newClaudePriority).toBe(50);
 
-      // Restore original
-      registerAdapter(
-        'claude-code',
-        100,
-        () => !!process.env.CLAUDE_PLUGIN_ROOT,
-        () => new ClaudeAdapter()
-      );
+      registerAdapter('claude-code', 100, detectClaude, createClaudeAdapter);
     });
   });
 
@@ -233,7 +269,6 @@ describe('Adapter Registry', () => {
       const first = getAdapter('claude-code');
       clearCache();
       const second = getAdapter('claude-code');
-      // New instance should be created
       expect(first).not.toBe(second);
     });
   });

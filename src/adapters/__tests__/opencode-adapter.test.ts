@@ -34,10 +34,10 @@ describe('OpenCodeAdapter', () => {
     it('should use XDG config path when available', () => {
       const originalXdg = process.env.XDG_CONFIG_HOME;
       process.env.XDG_CONFIG_HOME = '/custom/config';
-      
+
       const testAdapter = new OpenCodeAdapter();
       expect(testAdapter.config.paths.configDir).toContain('opencode');
-      
+
       if (originalXdg) {
         process.env.XDG_CONFIG_HOME = originalXdg;
       } else {
@@ -77,6 +77,12 @@ describe('OpenCodeAdapter', () => {
       const result = adapter.parseSessionInput(input);
       expect(result.workingDir).toBe('/worktree/path');
     });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseSessionInput('not valid json');
+      expect(result.sessionId).toBe('');
+      expect(result.workingDir).toBe(process.cwd());
+    });
   });
 
   describe('parseObservationInput', () => {
@@ -114,6 +120,12 @@ describe('OpenCodeAdapter', () => {
       expect(result.sessionId).toBe('oc_123');
       expect(result.toolName).toBe('read');
     });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseObservationInput('invalid');
+      expect(result.sessionId).toBe('');
+      expect(result.toolName).toBe('unknown');
+    });
   });
 
   describe('parseSummaryInput', () => {
@@ -124,6 +136,11 @@ describe('OpenCodeAdapter', () => {
 
       const result = adapter.parseSummaryInput(input);
       expect(result.sessionId).toBe('oc_123');
+    });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseSummaryInput('invalid');
+      expect(result.sessionId).toBe('');
     });
   });
 
@@ -147,6 +164,23 @@ describe('OpenCodeAdapter', () => {
       expect(result.metadata?.agent).toBe('main');
       expect(result.metadata?.model).toEqual({ providerID: 'anthropic', modelID: 'claude-4' });
     });
+
+    it('should coerce non-string prompt content to JSON', () => {
+      const input = JSON.stringify({
+        input: { sessionID: 'oc_123' },
+        output: {
+          message: { content: { type: 'structured', text: 'hello' } },
+        },
+      });
+
+      const result = adapter.parsePromptInput(input);
+      expect(result.prompt).toContain('structured');
+    });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parsePromptInput('invalid');
+      expect(result.sessionId).toBe('');
+    });
   });
 
   describe('parseSessionEndInput', () => {
@@ -164,6 +198,12 @@ describe('OpenCodeAdapter', () => {
     it('should default reason to other', () => {
       const input = JSON.stringify({ sessionID: 'oc_123' });
       const result = adapter.parseSessionEndInput(input);
+      expect(result.reason).toBe('other');
+    });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseSessionEndInput('invalid');
+      expect(result.sessionId).toBe('');
       expect(result.reason).toBe('other');
     });
   });
@@ -240,10 +280,19 @@ describe('OpenCodeAdapter', () => {
 });
 
 describe('detectOpenCode', () => {
-  const originalEnv = { ...process.env };
+  let savedPluginRoot: string | undefined;
+
+  beforeEach(() => {
+    savedPluginRoot = process.env.OPENCODE_PLUGIN_ROOT;
+    delete process.env.OPENCODE_PLUGIN_ROOT;
+  });
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    if (savedPluginRoot === undefined) {
+      delete process.env.OPENCODE_PLUGIN_ROOT;
+    } else {
+      process.env.OPENCODE_PLUGIN_ROOT = savedPluginRoot;
+    }
   });
 
   it('should detect when OPENCODE_PLUGIN_ROOT is set', () => {
@@ -251,15 +300,8 @@ describe('detectOpenCode', () => {
     expect(detectOpenCode()).toBe(true);
   });
 
-  it('should detect when OPENCODE_CONFIG is set', () => {
-    process.env.OPENCODE_CONFIG = '/some/config';
-    expect(detectOpenCode()).toBe(true);
-  });
-
-  it('should check filesystem for config directory when env vars not set', () => {
+  it('should return false when OPENCODE_PLUGIN_ROOT is not set', () => {
     delete process.env.OPENCODE_PLUGIN_ROOT;
-    delete process.env.OPENCODE_CONFIG;
-    const result = detectOpenCode();
-    expect(typeof result).toBe('boolean');
+    expect(detectOpenCode()).toBe(false);
   });
 });

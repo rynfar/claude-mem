@@ -20,24 +20,81 @@ function getDirname(): string {
 const _dirname = getDirname();
 
 /**
- * Simple path configuration for claude-mem
- * Standard paths based on Claude Code conventions
+ * Path configuration for claude-mem.
+ *
+ * Data directory resolution (in order):
+ * 1. Adapter-specific env var (e.g., OPENCODE_MEM_DATA_DIR)
+ * 2. Universal env var (CLAUDE_MEM_DATA_DIR - works for all agents)
+ * 3. Adapter's default path
+ *
+ * This allows shared data across agents while supporting per-agent overrides.
  */
 
-// Base directories
-export const DATA_DIR = SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR');
-// Note: CLAUDE_CONFIG_DIR is a Claude Code setting, not claude-mem, so leave as env var
+let _resolvedDataDir: string | null = null;
+
+function resolveDataDir(): string {
+  if (_resolvedDataDir !== null) {
+    return _resolvedDataDir;
+  }
+
+  try {
+    const adapter = getAdapter();
+    const prefix = adapter.getSettingsPrefix();
+
+    // 1. Adapter-specific override (e.g., OPENCODE_MEM_DATA_DIR)
+    const adapterEnvVar = `${prefix}DATA_DIR`;
+    if (process.env[adapterEnvVar]) {
+      _resolvedDataDir = process.env[adapterEnvVar]!;
+      return _resolvedDataDir;
+    }
+
+    // 2. Universal override (CLAUDE_MEM_DATA_DIR works for all agents)
+    if (process.env.CLAUDE_MEM_DATA_DIR) {
+      _resolvedDataDir = process.env.CLAUDE_MEM_DATA_DIR;
+      return _resolvedDataDir;
+    }
+
+    // 3. Adapter's default
+    _resolvedDataDir = adapter.config.paths.dataDir;
+    return _resolvedDataDir;
+  } catch {
+    // Adapter not available yet - use Claude default
+    _resolvedDataDir = SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR');
+    return _resolvedDataDir;
+  }
+}
+
+// Base directories - lazy evaluation via getter
+export const DATA_DIR = new Proxy({} as { toString(): string; valueOf(): string }, {
+  get(_target, prop) {
+    const dir = resolveDataDir();
+    if (prop === 'toString' || prop === 'valueOf') return () => dir;
+    if (prop === Symbol.toPrimitive) return () => dir;
+    return (dir as Record<string | symbol, unknown>)[prop];
+  },
+}) as unknown as string;
+
 export const CLAUDE_CONFIG_DIR = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude');
 
-// Data subdirectories
-export const ARCHIVES_DIR = join(DATA_DIR, 'archives');
-export const LOGS_DIR = join(DATA_DIR, 'logs');
-export const TRASH_DIR = join(DATA_DIR, 'trash');
-export const BACKUPS_DIR = join(DATA_DIR, 'backups');
-export const MODES_DIR = join(DATA_DIR, 'modes');
-export const USER_SETTINGS_PATH = join(DATA_DIR, 'settings.json');
-export const DB_PATH = join(DATA_DIR, 'claude-mem.db');
-export const VECTOR_DB_DIR = join(DATA_DIR, 'vector-db');
+// Data subdirectories - computed from DATA_DIR
+export const getArchivesDir = () => join(resolveDataDir(), 'archives');
+export const getLogsDir = () => join(resolveDataDir(), 'logs');
+export const getTrashDir = () => join(resolveDataDir(), 'trash');
+export const getBackupsDir = () => join(resolveDataDir(), 'backups');
+export const getModesDir = () => join(resolveDataDir(), 'modes');
+export const getUserSettingsPath = () => join(resolveDataDir(), 'settings.json');
+export const getDbPath = () => join(resolveDataDir(), 'claude-mem.db');
+export const getVectorDbDir = () => join(resolveDataDir(), 'vector-db');
+
+// Legacy constants for backward compatibility (evaluate lazily on first use)
+export const ARCHIVES_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'archives');
+export const LOGS_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'logs');
+export const TRASH_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'trash');
+export const BACKUPS_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'backups');
+export const MODES_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'modes');
+export const USER_SETTINGS_PATH = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'settings.json');
+export const DB_PATH = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'claude-mem.db');
+export const VECTOR_DB_DIR = join(SettingsDefaultsManager.get('CLAUDE_MEM_DATA_DIR'), 'vector-db');
 
 // Claude integration paths
 export const CLAUDE_SETTINGS_PATH = join(CLAUDE_CONFIG_DIR, 'settings.json');
@@ -69,19 +126,20 @@ export function ensureDir(dirPath: string): void {
  * Ensure all data directories exist
  */
 export function ensureAllDataDirs(): void {
-  ensureDir(DATA_DIR);
-  ensureDir(ARCHIVES_DIR);
-  ensureDir(LOGS_DIR);
-  ensureDir(TRASH_DIR);
-  ensureDir(BACKUPS_DIR);
-  ensureDir(MODES_DIR);
+  const dataDir = resolveDataDir();
+  ensureDir(dataDir);
+  ensureDir(getArchivesDir());
+  ensureDir(getLogsDir());
+  ensureDir(getTrashDir());
+  ensureDir(getBackupsDir());
+  ensureDir(getModesDir());
 }
 
 /**
  * Ensure modes directory exists
  */
 export function ensureModesDir(): void {
-  ensureDir(MODES_DIR);
+  ensureDir(getModesDir());
 }
 
 /**
@@ -149,10 +207,11 @@ export function getAgentPaths(): AgentPaths {
 }
 
 /**
- * Get the data directory from the current agent adapter.
+ * Get the data directory with adapter-aware resolution.
+ * This is the preferred way to get the data directory.
  */
 export function getDataDir(): string {
-  return getAgentPaths().dataDir;
+  return resolveDataDir();
 }
 
 /**

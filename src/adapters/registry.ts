@@ -41,13 +41,29 @@ export function detectAgent(): string {
     return detectedAgentId;
   }
 
-  for (const adapter of registeredAdapters) {
-    if (adapter.detect()) {
-      detectedAgentId = adapter.id;
-      return adapter.id;
+  // 1. Check for explicit override (allows manual selection)
+  const explicitAgent = process.env.CLAUDE_MEM_AGENT;
+  if (explicitAgent) {
+    const registration = registeredAdapters.find((a) => a.id === explicitAgent);
+    if (registration) {
+      detectedAgentId = explicitAgent;
+      return explicitAgent;
     }
   }
 
+  // 2. Auto-detect based on runtime environment signals
+  for (const adapter of registeredAdapters) {
+    try {
+      if (adapter.detect()) {
+        detectedAgentId = adapter.id;
+        return adapter.id;
+      }
+    } catch {
+      // Detector threw - skip this adapter, continue to next
+    }
+  }
+
+  // 3. Fallback to Claude (primary audience)
   detectedAgentId = 'claude-code';
   return detectedAgentId;
 }

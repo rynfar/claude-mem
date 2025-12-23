@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from 'bun:test';
-import { ClaudeAdapter } from '../agents/claude.js';
+import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
+import { ClaudeAdapter, detectClaude } from '../agents/claude.js';
 
 describe('ClaudeAdapter', () => {
   let adapter: ClaudeAdapter;
@@ -52,6 +52,12 @@ describe('ClaudeAdapter', () => {
       expect(result.sessionId).toBe('');
       expect(result.workingDir).toBe(process.cwd());
     });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseSessionInput('not valid json');
+      expect(result.sessionId).toBe('');
+      expect(result.workingDir).toBe(process.cwd());
+    });
   });
 
   describe('parseObservationInput', () => {
@@ -71,6 +77,12 @@ describe('ClaudeAdapter', () => {
       expect(result.toolOutput).toBe('file contents here');
       expect(result.workingDir).toBe('/project');
     });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseObservationInput('invalid');
+      expect(result.sessionId).toBe('');
+      expect(result.toolName).toBe('unknown');
+    });
   });
 
   describe('parseSummaryInput', () => {
@@ -84,6 +96,11 @@ describe('ClaudeAdapter', () => {
       const result = adapter.parseSummaryInput(input);
       expect(result.sessionId).toBe('ses_123');
       expect(result.transcriptPath).toBe('/path/to/transcript.jsonl');
+    });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseSummaryInput('invalid');
+      expect(result.sessionId).toBe('');
     });
   });
 
@@ -99,6 +116,11 @@ describe('ClaudeAdapter', () => {
       expect(result.sessionId).toBe('ses_123');
       expect(result.prompt).toBe('Help me fix this bug');
       expect(result.workingDir).toBe('/project');
+    });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parsePromptInput('invalid');
+      expect(result.sessionId).toBe('');
     });
   });
 
@@ -121,6 +143,12 @@ describe('ClaudeAdapter', () => {
         const result = adapter.parseSessionEndInput(input);
         expect(result.reason).toBe(reason);
       }
+    });
+
+    it('should handle malformed JSON gracefully', () => {
+      const result = adapter.parseSessionEndInput('invalid');
+      expect(result.sessionId).toBe('');
+      expect(result.reason).toBe('other');
     });
   });
 
@@ -218,5 +246,32 @@ describe('ClaudeAdapter', () => {
       expect(typeof projectName).toBe('string');
       expect(projectName.length).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('detectClaude', () => {
+  let savedPluginRoot: string | undefined;
+
+  beforeEach(() => {
+    savedPluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
+    delete process.env.CLAUDE_PLUGIN_ROOT;
+  });
+
+  afterEach(() => {
+    if (savedPluginRoot === undefined) {
+      delete process.env.CLAUDE_PLUGIN_ROOT;
+    } else {
+      process.env.CLAUDE_PLUGIN_ROOT = savedPluginRoot;
+    }
+  });
+
+  it('should detect when CLAUDE_PLUGIN_ROOT is set', () => {
+    process.env.CLAUDE_PLUGIN_ROOT = '/some/path';
+    expect(detectClaude()).toBe(true);
+  });
+
+  it('should return false when CLAUDE_PLUGIN_ROOT is not set', () => {
+    delete process.env.CLAUDE_PLUGIN_ROOT;
+    expect(detectClaude()).toBe(false);
   });
 });
